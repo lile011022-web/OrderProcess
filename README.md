@@ -26,6 +26,15 @@ npm run dev
 npm run build
 ```
 
+后端 mock API：
+
+```bash
+npm run backend:dev
+npm run backend:check
+```
+
+后端默认监听 `http://127.0.0.1:7301`，部署说明见 [docs/backend-deployment.md](docs/backend-deployment.md)。
+
 ## 原型账号
 
 | 角色 | 用户名 | 密码 | 默认入口 |
@@ -44,6 +53,7 @@ npm run build
 - 仓库操作费集中计算：5 美元 / 包裹，0.5 美元 / 张照片，固定汇率 6.8。
 - 付款后先进入“已付待确认金额”，仓库确认收到后才转为“实际入库成本”。
 - 异常包裹独立记录退款或下次抵扣，不混入正常入库成本。
+- 新增 Node.js mock API 后端部署层，覆盖登录、菜单、采购、包裹、异常、费用和对账接口。
 
 ## 验收建议
 
@@ -66,4 +76,5 @@ src/
   routes/          路由与登录保护
   utils/           权限、登录态、费用、格式化等集中规则
   types.ts         核心业务类型
+server/            Node.js mock API 后端
 ```

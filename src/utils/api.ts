@@ -53,6 +53,14 @@ export function loginApi(username: string, password: string, role: Role) {
   });
 }
 
+export function changePasswordApi(username: string, role: Role, oldPassword: string, newPassword: string) {
+  return apiRequest<{ message: string; user: User }>("/api/auth/change-password", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ username, role, oldPassword, newPassword }),
+  });
+}
+
 export type ListResponse<T> = {
   data: T[];
   total: number;

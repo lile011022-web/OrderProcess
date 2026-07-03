@@ -1,12 +1,13 @@
 {
   "name": "card-purchase-reconciliation-prototype",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "backend:dev": "node server/index.mjs",
     "backend:check": "node server/check.mjs",
+    "backend:clear-business-data": "node server/clearBusinessData.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

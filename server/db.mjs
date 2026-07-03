@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK(role IN ('admin','buyer','warehouse','customer')),
   password_hash TEXT NOT NULL,
+  password_changed_at TEXT,
   active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -66,6 +67,11 @@ CREATE TABLE IF NOT EXISTS uploads (
 );
 `);
 
+const userColumns = db.prepare("PRAGMA table_info(users)").all().map((column) => column.name);
+if (!userColumns.includes("password_changed_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN password_changed_at TEXT");
+}
+
 function insertUser(account) {
   db.prepare(`
     INSERT OR IGNORE INTO users (username, display_name, role, password_hash)
@@ -83,6 +89,8 @@ function insertRecord(kind, item) {
 export function seedIfEmpty() {
   const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
   if (userCount === 0) Object.values(authUsers).forEach(insertUser);
+
+  if (process.env.SEED_DEMO_DATA !== "true") return;
 
   const recordCount = db.prepare("SELECT COUNT(*) AS count FROM records").get().count;
   if (recordCount > 0) return;
@@ -103,7 +111,47 @@ export function getUser(username) {
     displayName: row.display_name,
     role: row.role,
     passwordHash: row.password_hash,
+    passwordChangedAt: row.password_changed_at,
   };
+}
+
+export function updateUserPassword(username, passwordHash, actor = "self") {
+  const before = getUser(username);
+  db.prepare("UPDATE users SET password_hash = ?, password_changed_at = CURRENT_TIMESTAMP WHERE username = ?").run(passwordHash, username);
+  const after = getUser(username);
+  writeAudit({
+    actor,
+    role: after?.role || "unknown",
+    action: "auth.changePassword",
+    targetKind: "user",
+    targetId: username,
+    before: before ? publicUser(before) : null,
+    after: after ? publicUser(after) : null,
+  });
+  return after;
+}
+
+export function clearBusinessData({ clearAudit = false } = {}) {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const records = db.prepare("DELETE FROM records").run();
+    const uploads = db.prepare("DELETE FROM uploads").run();
+    const audit = clearAudit ? db.prepare("DELETE FROM audit_logs").run() : { changes: 0 };
+    writeAudit({
+      actor: "system",
+      role: "system",
+      action: "system.clearBusinessData",
+      targetKind: "database",
+      targetId: "records",
+      before: null,
+      after: { records: records.changes, uploads: uploads.changes, audit: audit.changes },
+    });
+    db.exec("COMMIT");
+    return { records: records.changes, uploads: uploads.changes, audit: audit.changes };
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
 export function listRecords(kind) {
@@ -166,6 +214,14 @@ export function listUploads(targetKind, targetId) {
     WHERE target_kind = ? AND target_id = ?
     ORDER BY created_at DESC
   `).all(targetKind, targetId);
+}
+
+export function listAllUploads() {
+  return db.prepare(`
+    SELECT id, owner, target_kind AS targetKind, target_id AS targetId, filename, mime_type AS mimeType, path, size, created_at AS createdAt
+    FROM uploads
+    ORDER BY created_at DESC
+  `).all();
 }
 
 seedIfEmpty();

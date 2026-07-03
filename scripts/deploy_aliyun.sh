@@ -66,8 +66,15 @@ if [[ ! -f /etc/order-process/order-process.env ]]; then
   cat >/etc/order-process/order-process.env <<EOF
 TOKEN_SECRET=$TOKEN_SECRET
 CORS_ORIGIN=http://47.242.190.166
+SEED_DEMO_DATA=false
+AUTH_RATE_LIMIT_MAX=8
+AUTH_RATE_LIMIT_WINDOW_MS=900000
 EOF
   chmod 600 /etc/order-process/order-process.env
+else
+  grep -q '^SEED_DEMO_DATA=' /etc/order-process/order-process.env || echo 'SEED_DEMO_DATA=false' >> /etc/order-process/order-process.env
+  grep -q '^AUTH_RATE_LIMIT_MAX=' /etc/order-process/order-process.env || echo 'AUTH_RATE_LIMIT_MAX=8' >> /etc/order-process/order-process.env
+  grep -q '^AUTH_RATE_LIMIT_WINDOW_MS=' /etc/order-process/order-process.env || echo 'AUTH_RATE_LIMIT_WINDOW_MS=900000' >> /etc/order-process/order-process.env
 fi
 
 cd "$APP_DIR"

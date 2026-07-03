@@ -3,7 +3,7 @@ import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { URL } from "node:url";
-import { publicUser, signToken, verifyPassword, verifyToken } from "./auth.mjs";
+import { hashPassword, publicUser, signToken, validatePasswordStrength, verifyPassword, verifyToken } from "./auth.mjs";
 import { carrierConfig, calculateWarehouseFee, getTrackingUrl, inferCarrier } from "./rules.mjs";
 import {
   getRecord,
@@ -13,6 +13,7 @@ import {
   listUploads,
   saveRecord,
   saveUpload,
+  updateUserPassword,
   writeAudit,
 } from "./db.mjs";
 import { navItems } from "./mockData.mjs";
@@ -22,7 +23,10 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
-const WRITE_ROLES = new Set(["admin", "warehouse"]);
+const APP_VERSION = process.env.APP_VERSION || "1.2.1";
+const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
+const AUTH_MAX_ATTEMPTS = Number(process.env.AUTH_RATE_LIMIT_MAX || 8);
+const authAttempts = new Map();
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -34,6 +38,11 @@ function json(res, status, payload) {
     "access-control-allow-origin": CORS_ORIGIN,
     "access-control-allow-methods": "GET,POST,OPTIONS",
     "access-control-allow-headers": "content-type,authorization",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY",
+    "referrer-policy": "no-referrer",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "cache-control": "no-store",
   });
   res.end(body);
 }
@@ -87,6 +96,35 @@ function authFromRequest(req) {
   return payload;
 }
 
+function clientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  return forwarded || req.socket.remoteAddress || "unknown";
+}
+
+function rateLimitKey(req, scope, username = "") {
+  return `${scope}:${clientIp(req)}:${String(username || "").trim().toLowerCase()}`;
+}
+
+function checkAuthRateLimit(req, res, scope, username) {
+  const key = rateLimitKey(req, scope, username);
+  const now = Date.now();
+  const current = authAttempts.get(key);
+  if (!current || now > current.resetAt) {
+    authAttempts.set(key, { count: 1, resetAt: now + AUTH_WINDOW_MS });
+    return true;
+  }
+  current.count += 1;
+  if (current.count > AUTH_MAX_ATTEMPTS) {
+    error(res, 429, "TOO_MANY_REQUESTS", "尝试次数过多，请稍后再试");
+    return false;
+  }
+  return true;
+}
+
+function clearAuthRateLimit(req, scope, username) {
+  authAttempts.delete(rateLimitKey(req, scope, username));
+}
+
 function requireAuth(req, res) {
   const user = authFromRequest(req);
   if (!user) {
@@ -125,7 +163,7 @@ async function route(req, res) {
     return json(res, 200, {
       ok: true,
       service: "order-process-backend",
-      version: "1.1.0",
+      version: APP_VERSION,
       persistence: "sqlite",
       timestamp: new Date().toISOString(),
     });
@@ -143,10 +181,12 @@ async function route(req, res) {
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const body = await readJson(req);
     if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
+    if (!checkAuthRateLimit(req, res, "login", body.username)) return;
     const account = getUser(body.username);
     if (!account || account.role !== body.role || !verifyPassword(body.password, account.passwordHash)) {
       return error(res, 401, "UNAUTHORIZED", "账号、密码或角色不匹配");
     }
+    clearAuthRateLimit(req, "login", body.username);
     writeAudit({
       actor: account.username,
       role: account.role,
@@ -162,6 +202,24 @@ async function route(req, res) {
       redirectTo: defaultPathForRole(account.role),
       menus: roleMenus(account.role),
     });
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/auth/change-password") {
+    const body = await readJson(req);
+    if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
+    if (!checkAuthRateLimit(req, res, "change-password", body.username)) return;
+    const account = getUser(body.username);
+    if (!account || account.role !== body.role || !verifyPassword(body.oldPassword, account.passwordHash)) {
+      return error(res, 401, "UNAUTHORIZED", "账号、旧密码或角色不匹配");
+    }
+    const strengthError = validatePasswordStrength(body.newPassword);
+    if (strengthError) return error(res, 400, "WEAK_PASSWORD", strengthError);
+    if (verifyPassword(body.newPassword, account.passwordHash)) {
+      return error(res, 400, "SAME_PASSWORD", "新密码不能和旧密码相同");
+    }
+    const updated = updateUserPassword(account.username, hashPassword(body.newPassword), account.username);
+    clearAuthRateLimit(req, "change-password", body.username);
+    return json(res, 200, { user: publicUser(updated), message: "密码已修改，请使用新密码登录" });
   }
 
   if (req.method === "GET" && url.pathname === "/api/tracking") {

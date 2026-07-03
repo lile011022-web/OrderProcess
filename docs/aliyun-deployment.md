@@ -72,6 +72,7 @@ bash scripts/deploy_aliyun.sh
 - 拉取最新代码。
 - 创建 `/etc/order-process/order-process.env`。
 - 自动生成 `TOKEN_SECRET`。
+- 写入 `SEED_DEMO_DATA=false` 和登录/改密限流配置。
 - 安装 npm 依赖。
 - 使用同域 API 构建前端：`VITE_API_BASE_URL="" npm run build`。
 - 安装 systemd 服务：`order-process-backend`。
@@ -143,7 +144,7 @@ curl http://47.242.190.166/health
 http://47.242.190.166
 ```
 
-默认账号：
+初始账号：
 
 | 角色 | 用户名 | 密码 |
 | --- | --- | --- |
@@ -152,9 +153,40 @@ http://47.242.190.166
 | 仓库 | `warehouse` | `123456` |
 | 客户 | `customer` | `123456` |
 
-生产使用前应尽快增加用户管理和改密功能，或至少修改初始密码生成逻辑。
+生产使用前必须在登录页点击“修改密码”，把四个初始账号全部改成强密码。
 
-## 7. 数据与备份
+## 7. 清除测试数据
+
+v1.2.1 起生产默认不会自动写入业务演示数据。如果当前服务器已经有测试数据，登录服务器执行：
+
+```bash
+cd /opt/order-process
+SEED_DEMO_DATA=false npm run backend:clear-business-data
+systemctl restart order-process-backend
+```
+
+执行后再验证：
+
+```bash
+curl http://127.0.0.1/health
+```
+
+该命令不会删除四个登录账号，只会清除采购、包裹、异常、商品资料、仓库地址、对账和上传凭证等业务测试数据。
+
+## 8. 防破解与安全组
+
+必须确认：
+
+- 阿里云安全组：公网只开放 `80/443`，`22` 只允许你的固定公网 IP。
+- 不要开放 `7301`，后端只监听 `127.0.0.1:7301`，由 Nginx 转发 `/api` 和 `/health`。
+- `/etc/order-process/order-process.env` 权限为 `600`，不要截图或公开 `TOKEN_SECRET`。
+- 登录页修改四个初始账号密码，强密码至少 10 位，包含大小写字母、数字和特殊符号。
+- 正式使用建议绑定域名并配置 HTTPS 证书，之后把 `CORS_ORIGIN` 改为正式域名。
+- 定期备份数据；发现异常登录或大量 401/429 时，立即更换密码和 `TOKEN_SECRET`。
+
+系统已经增加登录/改密限流、强密码校验、Nginx 限流、安全响应头和 systemd 基础沙箱，但任何公网系统都不能承诺绝对不会被破解。安全组、强密码、HTTPS、备份和持续更新必须一起做。
+
+## 9. 数据与备份
 
 需要备份：
 
@@ -174,7 +206,7 @@ tar -czf /opt/order-process-backups/order-process-$(date +%F).tar.gz \
   /etc/order-process/order-process.env
 ```
 
-## 8. 当前需要你确认的信息
+## 10. 当前需要你确认的信息
 
 为了让我直接完成远程部署，请提供以下任一方式：
 

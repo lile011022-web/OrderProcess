@@ -9,14 +9,16 @@ import { packages, photos } from "../../data/mockData";
 import { openTracking } from "../../data/carrierConfig";
 import type { PackageItem } from "../../types";
 import { currency, dateText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function WarehouseReceived() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
-  const data = packages.filter((item) => item.status === "已收货");
+  const { data: packageRows, loading, error } = useApiList<PackageItem>(`/api/packages?status=${encodeURIComponent("已收货")}`, packages.filter((item) => item.status === "已收货"));
+  const data = packageRows.filter((item) => item.status === "已收货");
 
   return (
     <div>
-      <PageHeader title="已收货包裹" desc="仓库确认收到后的包裹记录，照片从对应运单号进入上传和查看。" />
+      <PageHeader title="已收货包裹" desc={error || (loading ? "正在从后端加载已收货包裹..." : "仓库确认收到后的包裹记录，照片从对应运单号进入上传和查看。")} />
       <DataTable
         data={data}
         columns={[

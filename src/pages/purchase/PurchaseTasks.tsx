@@ -9,12 +9,14 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { tasks } from "../../data/mockData";
 import type { PurchaseTask } from "../../types";
 import { currency, dateText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function PurchaseTasks() {
   const [selected, setSelected] = useState<PurchaseTask | null>(null);
+  const { data, loading, error } = useApiList<PurchaseTask>("/api/tasks", tasks);
   return (
     <div>
-      <PageHeader title="采购任务列表" desc="查看采购任务进度、接单进度、到仓进度与超时状态。" />
+      <PageHeader title="采购任务列表" desc={error || (loading ? "正在从后端加载采购任务..." : "查看采购任务进度、接单进度、到仓进度与超时状态。")} />
       <FilterBar placeholder="搜索任务编号、商品名称">
         <SelectFilter label="任务状态" options={["草稿", "已发布", "接单中", "已完成", "已暂停"]} />
         <SelectFilter label="买手" options={["Alex Chen", "Mia Wong", "Chris Lee"]} />
@@ -28,7 +30,7 @@ export function PurchaseTasks() {
         <StatCard title="超时任务" value="4" icon={ClipboardList} tone="orange" />
       </div>
       <DataTable
-        data={tasks}
+        data={data}
         columns={[
           { key: "id", title: "任务编号", render: (row) => <button onClick={() => setSelected(row)} className="font-black text-sky-700">{row.id}</button> },
           { key: "source", title: "来源", render: (row) => <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-black text-slate-600">{row.source}</span> },

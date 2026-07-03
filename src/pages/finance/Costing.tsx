@@ -3,7 +3,9 @@ import { DataTable } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { reconciliationRecords } from "../../data/mockData";
+import type { ReconciliationRecord } from "../../types";
 import { currency } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 const rows = [
   { product: "2024 Bowman Chrome Hobby Box", qty: 26, inbound: 43108, warehouse: 782, shipping: 4200, status: "待确认" },
@@ -12,14 +14,15 @@ const rows = [
 ];
 
 export function Costing() {
+  const { data: records, loading, error } = useApiList<ReconciliationRecord>("/api/reconciliation", reconciliationRecords);
   return (
     <div>
-      <PageHeader title="成本核算" desc="付款后不是最终成本，仓库确认收到后才转为实际入库采购成本。" actions={<button className="primary-btn flex items-center gap-2"><Calculator size={18} />重新分摊</button>} />
+      <PageHeader title="成本核算" desc={error || (loading ? "正在从后端加载对账数据..." : "付款后不是最终成本，仓库确认收到后才转为实际入库采购成本。")} actions={<button className="primary-btn flex items-center gap-2"><Calculator size={18} />重新分摊</button>} />
       <div className="panel mb-5 p-5">
         <h2 className="text-lg font-black text-ink">付款与入库成本确认</h2>
         <p className="mt-2 text-sm font-bold text-slate-500">买手或管理员付款后先进入已付待确认金额，只有仓库确认实际收到后才转为实际入库成本；异常金额单独列示，不混入正常成本。</p>
         <div className="mt-4 grid grid-cols-2 gap-4">
-          {reconciliationRecords.map((record) => (
+          {records.map((record) => (
             <div key={record.id} className="rounded-2xl bg-slate-50 p-4">
               <div className="flex items-center justify-between">
                 <p className="font-black text-ink">{record.period} 对账</p>

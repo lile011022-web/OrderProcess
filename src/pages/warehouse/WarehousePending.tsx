@@ -10,16 +10,33 @@ import { UploadBox } from "../../components/UploadBox";
 import { openTracking } from "../../data/carrierConfig";
 import { packages } from "../../data/mockData";
 import type { PackageItem } from "../../types";
+import { apiRequest } from "../../utils/api";
 import { dateText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function WarehousePending() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
   const [etaSelected, setEtaSelected] = useState<PackageItem | null>(null);
   const [toast, setToast] = useState("");
-  const data = packages.filter((item) => item.status !== "已收货");
+  const { data: packageRows, loading, error, setData } = useApiList<PackageItem>("/api/packages", packages);
+  const data = packageRows.filter((item) => item.status !== "已收货");
+
+  async function confirmReceived(item: PackageItem) {
+    try {
+      const result = await apiRequest<{ data: PackageItem; message: string }>(`/api/packages/${item.id}/confirm-received`, { method: "POST" });
+      setData((rows) => rows.map((row) => row.id === item.id ? result.data : row));
+      setSelected(null);
+      setToast(result.message);
+    } catch (confirmError) {
+      setToast(confirmError instanceof Error ? confirmError.message : "确认收货失败");
+    } finally {
+      setTimeout(() => setToast(""), 2200);
+    }
+  }
+
   return (
     <div>
-      <PageHeader title="待确认包裹" desc="仓库扫描或输入运单号，确认包裹收到状态与实收数量。" />
+      <PageHeader title="待确认包裹" desc={error || (loading ? "正在从后端加载待确认包裹..." : "仓库扫描或输入运单号，确认包裹收到状态与实收数量。")} />
       <div className="panel mb-5 flex items-center gap-3 p-4">
         <ScanLine size={24} className="text-slate-500" />
         <input className="h-14 flex-1 bg-transparent text-2xl font-black outline-none placeholder:text-slate-300" placeholder="扫描或输入运单号..." />
@@ -66,7 +83,7 @@ export function WarehousePending() {
             <UploadBox label="异常照片" />
           </div>
           <textarea className="soft-input min-h-24 w-full p-4" placeholder="收货备注" />
-          <button className="primary-btn w-full" onClick={() => { setSelected(null); setToast("仓库确认已保存，已转入实际入库成本"); setTimeout(() => setToast(""), 2200); }}>提交确认</button>
+          <button className="primary-btn w-full" onClick={() => confirmReceived(selected)}>提交确认</button>
         </div>}
       </Modal>
       <Toast message={toast} />

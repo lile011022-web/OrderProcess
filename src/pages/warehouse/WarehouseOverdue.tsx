@@ -9,14 +9,16 @@ import { packages } from "../../data/mockData";
 import type { PackageItem } from "../../types";
 import { getCurrentUser } from "../../utils/auth";
 import { currency, dateText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function WarehouseOverdue() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
-  const data = packages.filter((item) => item.overdue);
+  const { data: packageRows, loading, error } = useApiList<PackageItem>("/api/packages?overdue=true", packages.filter((item) => item.overdue));
+  const data = packageRows.filter((item) => item.overdue);
   const user = getCurrentUser();
   return (
     <div>
-      <PageHeader title="超时待核查" desc="预计到达超时只提醒仓库核查，不直接生成异常金额。" />
+      <PageHeader title="超时待核查" desc={error || (loading ? "正在从后端加载超时包裹..." : "预计到达超时只提醒仓库核查，不直接生成异常金额。")} />
       <DataTable
         data={data}
         columns={[

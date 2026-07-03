@@ -8,10 +8,11 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { tasks } from "../../data/mockData";
 import { requireCurrentUser } from "../../utils/auth";
 import { currency, dateText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function CustomerTasks() {
   const user = requireCurrentUser();
-  const data = tasks.filter((task) => task.requester === user.displayName);
+  const { data, loading, error } = useApiList(`/api/tasks?role=customer&owner=${encodeURIComponent(user.displayName)}`, tasks.filter((task) => task.requester === user.displayName));
   const published = data.filter((task) => task.status === "已发布").length;
   const accepting = data.filter((task) => task.status === "接单中").length;
   const totalBudget = data.reduce((sum, task) => sum + task.targetPrice * task.quantity, 0);
@@ -20,7 +21,7 @@ export function CustomerTasks() {
     <div>
       <PageHeader
         title="我的采购任务"
-        desc="客户发布采购需求后，买手在任务大厅接单；客户可追踪接单、采购和到仓进度。"
+        desc={error || (loading ? "正在从后端加载我的采购任务..." : "客户发布采购需求后，买手在任务大厅接单；客户可追踪接单、采购和到仓进度。")}
         actions={<Link to="/customer/tasks/new" className="primary-btn flex items-center gap-2"><Plus size={18} />发布采购任务</Link>}
       />
       <div className="mb-5 grid grid-cols-4 gap-5">

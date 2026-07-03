@@ -10,12 +10,14 @@ import { openTracking } from "../../data/carrierConfig";
 import { packages, photos } from "../../data/mockData";
 import type { PackageItem } from "../../types";
 import { currency, dateText, paymentStatusText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function PackageList() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
+  const { data, loading, error } = useApiList<PackageItem>("/api/packages", packages);
   return (
     <div>
-      <PageHeader title="包裹列表" desc="集中管理买手采购回填后的运单、预计到达、收货与异常。" />
+      <PageHeader title="包裹列表" desc={error || (loading ? "正在从后端加载包裹数据..." : "集中管理买手采购回填后的运单、预计到达、收货与异常。")} />
       <FilterBar placeholder="搜索快递公司、运单号、买手">
         <SelectFilter label="快递公司" options={["UPS", "FedEx", "USPS"]} />
         <SelectFilter label="包裹状态" options={["在途", "已收货", "预计到达超时", "物流异常"]} />
@@ -23,7 +25,7 @@ export function PackageList() {
         <SelectFilter label="仓库" options={["洛杉矶一号仓", "纽约中转仓", "俄勒冈免税仓"]} />
       </FilterBar>
       <DataTable
-        data={packages}
+        data={data}
         columns={[
           { key: "id", title: "包裹编号", render: (row) => row.id },
           { key: "carrier", title: "快递公司", render: (row) => row.carrier },

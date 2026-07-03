@@ -13,9 +13,11 @@ const login = await request("/api/auth/login", {
   headers: { "content-type": "application/json" },
   body: JSON.stringify({ username: "admin", password: "123456", role: "admin" }),
 });
-const packages = await request("/api/packages?overdue=true");
-const fee = await request("/api/warehouse-fees/calculate?packageCount=2&photoCount=3");
+const authHeaders = { authorization: `Bearer ${login.token}` };
+const packages = await request("/api/packages?overdue=true", { headers: authHeaders });
+const fee = await request("/api/warehouse-fees/calculate?packageCount=2&photoCount=3", { headers: authHeaders });
 const tracking = await request("/api/tracking?trackingNo=1Z999AA10123456784");
+const audit = await request("/api/audit-logs?limit=5", { headers: authHeaders });
 
 console.log(JSON.stringify({
   health: health.ok,
@@ -23,4 +25,5 @@ console.log(JSON.stringify({
   overduePackages: packages.total,
   fee: fee.data,
   tracking,
+  auditRows: audit.total,
 }, null, 2));

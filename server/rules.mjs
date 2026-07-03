@@ -21,6 +21,12 @@ export const carrierConfig = {
 };
 
 export function calculateWarehouseFee({ packageCount, photoCount }) {
+  if (!Number.isInteger(packageCount) || !Number.isInteger(photoCount)) {
+    throw new Error("packageCount/photoCount 必须是整数");
+  }
+  if (packageCount < 0 || photoCount < 0) {
+    throw new Error("packageCount/photoCount 不能为负数");
+  }
   const packageFee = packageCount * WAREHOUSE_PACKAGE_FEE_USD;
   const photoFee = photoCount * PHOTO_FEE_USD;
   const usdTotal = packageFee + photoFee;

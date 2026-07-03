@@ -1,6 +1,6 @@
 # 后端部署说明
 
-当前后端是 v1.1 mock API 部署层，使用 Node.js 原生 HTTP 服务实现，不依赖第三方运行库，不连接真实数据库。它用于先把登录、菜单、采购、包裹、异常、费用和对账接口部署出来，后续可逐步替换为数据库和真实鉴权。
+当前后端使用 Node.js 原生 HTTP 服务和 Node 内置 SQLite。它已经具备基础持久化、密码哈希、token 登录、角色校验、审计日志、上传凭证落盘和业务参数校验。Node 22 会对内置 SQLite 输出实验性提示，服务可正常运行；生产环境建议固定 Node 版本并在升级前回归测试。
 
 ## 本地运行
 
@@ -34,6 +34,10 @@ API_BASE_URL=https://api.example.com npm run backend:check
 | `PORT` | `7301` | 后端监听端口 |
 | `HOST` | `0.0.0.0` | 后端监听地址 |
 | `CORS_ORIGIN` | `*` | 允许访问 API 的前端来源 |
+| `DATA_DIR` | `data` | SQLite 数据文件目录 |
+| `DB_PATH` | `data/order-process.sqlite` | SQLite 数据库路径 |
+| `UPLOAD_DIR` | `uploads` | 上传凭证保存目录 |
+| `TOKEN_SECRET` | `dev-change-me-before-production` | token 签名密钥，生产必须修改 |
 
 ## 核心接口
 
@@ -42,6 +46,7 @@ API_BASE_URL=https://api.example.com npm run backend:check
 | `GET` | `/health` | 健康检查 |
 | `GET` | `/api/meta` | 服务元信息、角色、快递配置 |
 | `POST` | `/api/auth/login` | mock 登录 |
+| `GET` | `/api/auth/me` | 当前登录用户 |
 | `GET` | `/api/navigation?role=admin` | 按角色获取菜单 |
 | `GET` | `/api/tasks` | 采购任务 |
 | `GET` | `/api/buyer-fill-records` | 买手回填 |
@@ -54,6 +59,9 @@ API_BASE_URL=https://api.example.com npm run backend:check
 | `GET` | `/api/warehouses` | 仓库地址 |
 | `GET` | `/api/warehouse-fees/calculate?packageCount=2&photoCount=3` | 仓库费用计算 |
 | `GET` | `/api/tracking?trackingNo=...` | 运单识别与官网查询地址 |
+| `POST` | `/api/uploads` | 上传图片/PDF 凭证 |
+| `GET` | `/api/uploads?targetKind=package&targetId=...` | 查看凭证 |
+| `GET` | `/api/audit-logs` | 审计日志，管理员可用 |
 
 ## Docker 部署
 
@@ -64,6 +72,9 @@ docker run -d \
   --restart unless-stopped \
   -p 7301:7301 \
   -e CORS_ORIGIN=https://your-frontend-domain.com \
+  -e TOKEN_SECRET=replace-with-long-random-secret \
+  -v order-process-data:/app/data \
+  -v order-process-uploads:/app/uploads \
   order-process-backend:1.1
 ```
 
@@ -98,6 +109,9 @@ Environment=NODE_ENV=production
 Environment=PORT=7301
 Environment=HOST=127.0.0.1
 Environment=CORS_ORIGIN=https://your-frontend-domain.com
+Environment=TOKEN_SECRET=replace-with-long-random-secret
+Environment=DATA_DIR=/opt/order-process/data
+Environment=UPLOAD_DIR=/opt/order-process/uploads
 
 [Install]
 WantedBy=multi-user.target
@@ -122,6 +136,6 @@ location /health {
 
 ## 当前限制
 
-- 数据来自 `server/mockData.mjs`，服务重启后 POST 状态变化会恢复初始 mock 数据。
-- 登录是 mock 登录，不发真实 token。
-- 还没有真实数据库、审计日志、文件上传存储和生产级权限校验。
+- 当前内置四个初始账号，首次启动会写入 SQLite；后续应增加用户管理和改密流程。
+- 文件上传保存在本机目录；多服务器部署时建议迁移到对象存储。
+- 暂未接真实物流官网 API。

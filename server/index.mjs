@@ -1,27 +1,30 @@
+import crypto from "node:crypto";
+import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
 import { URL } from "node:url";
+import { publicUser, signToken, verifyPassword, verifyToken } from "./auth.mjs";
+import { carrierConfig, calculateWarehouseFee, getTrackingUrl, inferCarrier } from "./rules.mjs";
 import {
-  authUsers,
-  fillRecords,
-  navItems,
-  packageExceptions,
-  packages,
-  productProfiles,
-  reconciliationRecords,
-  tasks,
-  warehouseAddresses,
-} from "./mockData.mjs";
-import { calculateWarehouseFee, carrierConfig, getTrackingUrl, inferCarrier } from "./rules.mjs";
+  getRecord,
+  getUser,
+  listAuditLogs,
+  listRecords,
+  listUploads,
+  saveRecord,
+  saveUpload,
+  writeAudit,
+} from "./db.mjs";
+import { navItems } from "./mockData.mjs";
 
 const PORT = Number(process.env.PORT || 7301);
 const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
+const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
+const WRITE_ROLES = new Set(["admin", "warehouse"]);
 
-function publicUser(account) {
-  if (!account) return null;
-  const { password: _password, ...user } = account;
-  return user;
-}
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 function json(res, status, payload) {
   const body = JSON.stringify(payload);
@@ -35,17 +38,18 @@ function json(res, status, payload) {
   res.end(body);
 }
 
-function notFound(res) {
-  json(res, 404, { error: "NOT_FOUND", message: "接口不存在" });
-}
-
-function badRequest(res, message) {
-  json(res, 400, { error: "BAD_REQUEST", message });
+function error(res, status, code, message) {
+  json(res, status, { error: code, message });
 }
 
 async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > MAX_JSON_BYTES) return { tooLarge: true };
+    chunks.push(chunk);
+  }
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw) return {};
   try {
@@ -58,17 +62,8 @@ async function readJson(req) {
 function roleMenus(role) {
   return navItems
     .filter((item) => item.roles.includes(role))
-    .map((item) => ({
-      ...item,
-      children: item.children?.filter((child) => child.roles.includes(role)),
-    }))
+    .map((item) => ({ ...item, children: item.children?.filter((child) => child.roles.includes(role)) }))
     .filter((item) => item.path || item.children?.length);
-}
-
-function filteredList(list, searchParams, fields) {
-  const keyword = searchParams.get("q")?.trim().toLowerCase();
-  if (!keyword) return list;
-  return list.filter((item) => fields.some((field) => String(item[field] ?? "").toLowerCase().includes(keyword)));
 }
 
 function defaultPathForRole(role) {
@@ -78,164 +73,254 @@ function defaultPathForRole(role) {
   return "/dashboard";
 }
 
-async function handle(req, res) {
+function filteredList(list, searchParams, fields) {
+  const keyword = searchParams.get("q")?.trim().toLowerCase();
+  if (!keyword) return list;
+  return list.filter((item) => fields.some((field) => String(item[field] ?? "").toLowerCase().includes(keyword)));
+}
+
+function authFromRequest(req) {
+  const header = req.headers.authorization || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const payload = verifyToken(token);
+  if (!payload) return null;
+  return payload;
+}
+
+function requireAuth(req, res) {
+  const user = authFromRequest(req);
+  if (!user) {
+    error(res, 401, "UNAUTHORIZED", "请先登录");
+    return null;
+  }
+  return user;
+}
+
+function requireRole(user, res, roles) {
+  if (!roles.includes(user.role)) {
+    error(res, 403, "FORBIDDEN", "当前角色无权执行该操作");
+    return false;
+  }
+  return true;
+}
+
+function canReadKind(user, kind, item) {
+  if (user.role === "admin") return true;
+  if (user.role === "warehouse") return ["package", "packageException", "warehouse", "reconciliation"].includes(kind);
+  if (user.role === "buyer") return item.buyer === user.displayName || kind === "task";
+  if (user.role === "customer") return item.requester === user.displayName || item.owner === user.displayName;
+  return false;
+}
+
+function listKindForUser(kind, user, searchParams, fields) {
+  return filteredList(listRecords(kind), searchParams, fields).filter((item) => canReadKind(user, kind, item));
+}
+
+async function route(req, res) {
   const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
 
-  if (req.method === "OPTIONS") {
-    json(res, 204, {});
-    return;
-  }
+  if (req.method === "OPTIONS") return json(res, 204, {});
 
   if (req.method === "GET" && url.pathname === "/health") {
-    json(res, 200, {
+    return json(res, 200, {
       ok: true,
       service: "order-process-backend",
       version: "1.1.0",
+      persistence: "sqlite",
       timestamp: new Date().toISOString(),
     });
-    return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/meta") {
-    json(res, 200, {
+    return json(res, 200, {
       service: "球星卡采购接单对账系统 API",
-      stage: "mock-api",
+      stage: "persistent-api",
       roles: ["admin", "buyer", "warehouse", "customer"],
       carriers: Object.values(carrierConfig),
     });
-    return;
   }
 
   if (req.method === "POST" && url.pathname === "/api/auth/login") {
     const body = await readJson(req);
-    if (!body) return badRequest(res, "请求体必须是 JSON");
-    const account = authUsers[body.username];
-    if (!account || account.password !== body.password || account.role !== body.role) {
-      json(res, 401, { error: "UNAUTHORIZED", message: "账号、密码或角色不匹配" });
-      return;
+    if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
+    const account = getUser(body.username);
+    if (!account || account.role !== body.role || !verifyPassword(body.password, account.passwordHash)) {
+      return error(res, 401, "UNAUTHORIZED", "账号、密码或角色不匹配");
     }
-    json(res, 200, { user: publicUser(account), redirectTo: defaultPathForRole(account.role), menus: roleMenus(account.role) });
-    return;
+    writeAudit({
+      actor: account.username,
+      role: account.role,
+      action: "auth.login",
+      targetKind: "user",
+      targetId: account.username,
+      before: null,
+      after: publicUser(account),
+    });
+    return json(res, 200, {
+      user: publicUser(account),
+      token: signToken(account),
+      redirectTo: defaultPathForRole(account.role),
+      menus: roleMenus(account.role),
+    });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/tracking") {
+    const trackingNo = url.searchParams.get("trackingNo") || "";
+    const carrier = url.searchParams.get("carrier");
+    return json(res, 200, {
+      trackingNo,
+      carrier: carrier || inferCarrier(trackingNo),
+      url: getTrackingUrl({ carrier, trackingNo }),
+    });
+  }
+
+  const user = requireAuth(req, res);
+  if (!user) return;
+
+  if (req.method === "GET" && url.pathname === "/api/auth/me") {
+    return json(res, 200, { user, menus: roleMenus(user.role), defaultPath: defaultPathForRole(user.role) });
   }
 
   if (req.method === "GET" && url.pathname === "/api/navigation") {
-    const role = url.searchParams.get("role");
-    if (!role || !["admin", "buyer", "warehouse", "customer"].includes(role)) return badRequest(res, "role 参数无效");
-    json(res, 200, { role, menus: roleMenus(role), defaultPath: defaultPathForRole(role) });
-    return;
+    const role = url.searchParams.get("role") || user.role;
+    if (role !== user.role && user.role !== "admin") return error(res, 403, "FORBIDDEN", "不能读取其他角色菜单");
+    return json(res, 200, { role, menus: roleMenus(role), defaultPath: defaultPathForRole(role) });
   }
 
   if (req.method === "GET" && url.pathname === "/api/tasks") {
-    const role = url.searchParams.get("role");
-    const owner = url.searchParams.get("owner");
-    let data = filteredList(tasks, url.searchParams, ["id", "productName", "buyer", "requester"]);
-    if (role === "customer" && owner) data = data.filter((task) => task.requester === owner);
-    json(res, 200, { data, total: data.length });
-    return;
+    const data = listKindForUser("task", user, url.searchParams, ["id", "productName", "buyer", "requester"]);
+    return json(res, 200, { data, total: data.length });
   }
 
   if (req.method === "GET" && url.pathname === "/api/buyer-fill-records") {
-    const buyer = url.searchParams.get("buyer");
-    let data = filteredList(fillRecords, url.searchParams, ["id", "orderId", "buyer", "productName", "trackingNo"]);
-    if (buyer) data = data.filter((record) => record.buyer === buyer);
-    json(res, 200, { data, total: data.length });
-    return;
+    const data = listKindForUser("buyerFillRecord", user, url.searchParams, ["id", "orderId", "buyer", "productName", "trackingNo"]);
+    return json(res, 200, { data, total: data.length });
   }
 
   if (req.method === "GET" && url.pathname === "/api/packages") {
     const status = url.searchParams.get("status");
     const overdue = url.searchParams.get("overdue");
-    let data = filteredList(packages, url.searchParams, ["id", "trackingNo", "buyer", "product", "warehouse"]);
+    let data = listKindForUser("package", user, url.searchParams, ["id", "trackingNo", "buyer", "product", "warehouse"]);
     if (status) data = data.filter((item) => item.status === status);
     if (overdue === "true") data = data.filter((item) => item.overdue);
-    json(res, 200, { data, total: data.length });
-    return;
+    return json(res, 200, { data, total: data.length });
   }
 
   const confirmMatch = url.pathname.match(/^\/api\/packages\/([^/]+)\/confirm-received$/);
   if (req.method === "POST" && confirmMatch) {
-    const item = packages.find((pkg) => pkg.id === confirmMatch[1]);
-    if (!item) return notFound(res);
+    if (!requireRole(user, res, ["admin", "warehouse"])) return;
+    const item = getRecord("package", confirmMatch[1]);
+    if (!item) return error(res, 404, "NOT_FOUND", "包裹不存在");
+    if (item.paymentStatus === "confirmed_received") {
+      return json(res, 200, { data: item, message: "包裹已确认收货，无需重复转换成本" });
+    }
     item.receivedAt = new Date().toISOString();
     item.status = "已收货";
     item.inboundCost += item.paidPendingConfirmAmount;
     item.paidPendingConfirmAmount = 0;
     item.paymentStatus = "confirmed_received";
     item.overdue = false;
-    json(res, 200, { data: item, message: "已确认收货，待确认金额已转为实际入库成本" });
-    return;
+    return json(res, 200, { data: saveRecord("package", item, user, "package.confirmReceived"), message: "已确认收货，待确认金额已转为实际入库成本" });
   }
 
   if (req.method === "GET" && url.pathname === "/api/packages/exceptions") {
     const status = url.searchParams.get("status");
     const resolution = url.searchParams.get("resolution");
-    let data = filteredList(packageExceptions, url.searchParams, ["id", "trackingNo", "buyer", "product", "reason", "owner"]);
+    let data = listKindForUser("packageException", user, url.searchParams, ["id", "trackingNo", "buyer", "product", "reason", "owner"]);
     if (status) data = data.filter((item) => item.status === status);
     if (resolution) data = data.filter((item) => item.resolution === resolution);
-    json(res, 200, { data, total: data.length });
-    return;
+    return json(res, 200, { data, total: data.length });
   }
 
   const resolveExceptionMatch = url.pathname.match(/^\/api\/packages\/exceptions\/([^/]+)\/resolve$/);
   if (req.method === "POST" && resolveExceptionMatch) {
-    const item = packageExceptions.find((exception) => exception.id === resolveExceptionMatch[1]);
-    if (!item) return notFound(res);
+    if (!requireRole(user, res, ["admin", "warehouse"])) return;
+    const item = getRecord("packageException", resolveExceptionMatch[1]);
+    if (!item) return error(res, 404, "NOT_FOUND", "异常记录不存在");
     const body = await readJson(req);
-    if (!body) return badRequest(res, "请求体必须是 JSON");
+    if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
+    if (body.resolution && !["refund", "next_credit"].includes(body.resolution)) return error(res, 400, "BAD_REQUEST", "处理方式无效");
     item.status = "resolved";
-    item.resolution = body.resolution === "refund" ? "refund" : item.resolution;
-    item.note = body.note || item.note;
-    json(res, 200, { data: item, message: "异常处理结果已保存" });
-    return;
+    item.resolution = body.resolution || item.resolution;
+    item.note = String(body.note || item.note || "").slice(0, 1000);
+    return json(res, 200, { data: saveRecord("packageException", item, user, "exception.resolve"), message: "异常处理结果已保存" });
   }
 
   if (req.method === "GET" && url.pathname === "/api/reconciliation") {
-    json(res, 200, { data: reconciliationRecords, total: reconciliationRecords.length });
-    return;
+    if (!requireRole(user, res, ["admin", "warehouse"])) return;
+    const data = listRecords("reconciliation");
+    return json(res, 200, { data, total: data.length });
   }
 
   if (req.method === "GET" && url.pathname === "/api/products") {
-    const owner = url.searchParams.get("owner");
-    let data = filteredList(productProfiles, url.searchParams, ["id", "name", "category", "brand", "owner"]);
-    if (owner) data = data.filter((item) => item.owner === owner);
-    json(res, 200, { data, total: data.length });
-    return;
+    const data = listKindForUser("product", user, url.searchParams, ["id", "name", "category", "brand", "owner"]);
+    return json(res, 200, { data, total: data.length });
   }
 
   if (req.method === "GET" && url.pathname === "/api/warehouses") {
-    const owner = url.searchParams.get("owner");
-    let data = filteredList(warehouseAddresses, url.searchParams, ["id", "name", "owner", "contactName", "state"]);
-    if (owner) data = data.filter((item) => item.owner === owner);
-    json(res, 200, { data, total: data.length });
-    return;
+    const data = listKindForUser("warehouse", user, url.searchParams, ["id", "name", "owner", "contactName", "state"]);
+    return json(res, 200, { data, total: data.length });
   }
 
   if (req.method === "GET" && url.pathname === "/api/warehouse-fees/calculate") {
     const packageCount = Number(url.searchParams.get("packageCount") || 0);
     const photoCount = Number(url.searchParams.get("photoCount") || 0);
-    if (!Number.isFinite(packageCount) || !Number.isFinite(photoCount)) return badRequest(res, "packageCount/photoCount 必须是数字");
-    json(res, 200, { data: calculateWarehouseFee({ packageCount, photoCount }) });
-    return;
+    try {
+      return json(res, 200, { data: calculateWarehouseFee({ packageCount, photoCount }) });
+    } catch (calculationError) {
+      return error(res, 400, "BAD_REQUEST", calculationError.message);
+    }
   }
 
-  if (req.method === "GET" && url.pathname === "/api/tracking") {
-    const trackingNo = url.searchParams.get("trackingNo") || "";
-    const carrier = url.searchParams.get("carrier");
-    json(res, 200, {
-      trackingNo,
-      carrier: carrier || inferCarrier(trackingNo),
-      url: getTrackingUrl({ carrier, trackingNo }),
+  if (req.method === "POST" && url.pathname === "/api/uploads") {
+    const body = await readJson(req);
+    if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
+    if (!body.targetKind || !body.targetId || !body.filename || !body.mimeType || !body.contentBase64) {
+      return error(res, 400, "BAD_REQUEST", "缺少上传字段");
+    }
+    if (!String(body.mimeType).startsWith("image/") && body.mimeType !== "application/pdf") {
+      return error(res, 400, "BAD_REQUEST", "仅允许图片或 PDF 凭证");
+    }
+    const buffer = Buffer.from(String(body.contentBase64), "base64");
+    if (!buffer.length || buffer.length > 1024 * 1024 * 4) return error(res, 400, "BAD_REQUEST", "文件大小必须在 1B 到 4MB 之间");
+    const id = `UP-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+    const ext = path.extname(String(body.filename)).toLowerCase().replace(/[^a-z0-9.]/g, "") || ".bin";
+    const safePath = path.join(UPLOAD_DIR, `${id}${ext}`);
+    fs.writeFileSync(safePath, buffer);
+    const upload = saveUpload({
+      id,
+      owner: user.username,
+      targetKind: String(body.targetKind),
+      targetId: String(body.targetId),
+      filename: String(body.filename).slice(0, 180),
+      mimeType: String(body.mimeType),
+      path: safePath,
+      size: buffer.length,
     });
-    return;
+    writeAudit({ actor: user.username, role: user.role, action: "upload.create", targetKind: upload.targetKind, targetId: upload.targetId, before: null, after: upload });
+    return json(res, 201, { data: upload });
   }
 
-  notFound(res);
+  if (req.method === "GET" && url.pathname === "/api/uploads") {
+    const targetKind = url.searchParams.get("targetKind");
+    const targetId = url.searchParams.get("targetId");
+    if (!targetKind || !targetId) return error(res, 400, "BAD_REQUEST", "targetKind/targetId 必填");
+    return json(res, 200, { data: listUploads(targetKind, targetId) });
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/audit-logs") {
+    if (!requireRole(user, res, ["admin"])) return;
+    const data = listAuditLogs(url.searchParams.get("limit") || 100);
+    return json(res, 200, { data, total: data.length });
+  }
+
+  return error(res, 404, "NOT_FOUND", "接口不存在");
 }
 
 const server = http.createServer((req, res) => {
-  handle(req, res).catch((error) => {
-    console.error(error);
-    json(res, 500, { error: "INTERNAL_SERVER_ERROR", message: "服务器内部错误" });
+  route(req, res).catch((routeError) => {
+    console.error(routeError);
+    error(res, 500, "INTERNAL_SERVER_ERROR", "服务器内部错误");
   });
 });
 

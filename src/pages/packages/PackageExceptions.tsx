@@ -10,20 +10,22 @@ import { openTracking } from "../../data/carrierConfig";
 import { packageExceptions } from "../../data/mockData";
 import type { PackageException } from "../../types";
 import { currency, dateText, exceptionResolutionText, exceptionStatusText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function PackageExceptions() {
   const [selected, setSelected] = useState<PackageException | null>(null);
-  const refundAmount = packageExceptions.filter((item) => item.resolution === "refund").reduce((sum, item) => sum + item.amount, 0);
-  const creditAmount = packageExceptions.filter((item) => item.resolution === "next_credit").reduce((sum, item) => sum + item.amount, 0);
+  const { data, loading, error } = useApiList<PackageException>("/api/packages/exceptions", packageExceptions);
+  const refundAmount = data.filter((item) => item.resolution === "refund").reduce((sum, item) => sum + item.amount, 0);
+  const creditAmount = data.filter((item) => item.resolution === "next_credit").reduce((sum, item) => sum + item.amount, 0);
 
   return (
     <div>
-      <PageHeader title="包裹异常" desc="记录空包、丢失、少货、错货、物流异常，异常金额不直接进入正常入库成本。" />
+      <PageHeader title="包裹异常" desc={error || (loading ? "正在从后端加载异常记录..." : "记录空包、丢失、少货、错货、物流异常，异常金额不直接进入正常入库成本。")} />
       <div className="mb-5 grid grid-cols-4 gap-5">
-        <StatCard title="异常记录" value={String(packageExceptions.length)} />
+        <StatCard title="异常记录" value={String(data.length)} />
         <StatCard title="退款金额" value={currency(refundAmount)} tone="orange" />
         <StatCard title="下次抵扣" value={currency(creditAmount)} tone="violet" />
-        <StatCard title="待处理" value={String(packageExceptions.filter((item) => item.status !== "resolved").length)} tone="sky" />
+        <StatCard title="待处理" value={String(data.filter((item) => item.status !== "resolved").length)} tone="sky" />
       </div>
       <FilterBar placeholder="搜索异常编号、运单号、买手">
         <SelectFilter label="处理方式" options={["退款", "下次抵扣"]} />
@@ -31,7 +33,7 @@ export function PackageExceptions() {
         <SelectFilter label="责任方" options={["买手", "仓库", "快递公司"]} />
       </FilterBar>
       <DataTable
-        data={packageExceptions}
+        data={data}
         columns={[
           { key: "id", title: "异常编号", render: (row) => row.id },
           { key: "tracking", title: "运单号", render: (row) => <button className="font-black text-sky-700" title="打开对应快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}>{row.trackingNo}</button> },

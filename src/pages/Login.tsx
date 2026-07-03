@@ -2,7 +2,7 @@ import { Lock, UserRound } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Role } from "../types";
-import { loginWithMockAccount } from "../utils/auth";
+import { loginWithBackend } from "../utils/auth";
 import { roleLabels } from "../utils/permissions";
 
 export function Login() {
@@ -11,20 +11,25 @@ export function Login() {
   const [password, setPassword] = useState("123456");
   const [role, setRole] = useState<Role>("admin");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
   const particles = useMemo(() => Array.from({ length: 54 }, (_, index) => ({
     left: `${(index * 37) % 100}%`,
     top: `${(index * 19) % 100}%`,
     delay: `${(index % 9) * 0.42}s`,
   })), []);
 
-  function submit(event: FormEvent) {
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    const result = loginWithMockAccount(username, password, role);
-    if (!result) {
-      setError("账号、密码或角色不匹配，请检查后再登录。");
-      return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await loginWithBackend(username, password, role);
+      navigate(result.redirectTo, { replace: true });
+    } catch (loginError) {
+      setError(loginError instanceof Error ? loginError.message : "登录失败，请稍后重试。");
+    } finally {
+      setLoading(false);
     }
-    navigate(result.redirectTo, { replace: true });
   }
 
   return (
@@ -64,7 +69,7 @@ export function Login() {
           </div>
         </div>
         {error && <p className="mt-4 rounded-2xl bg-rose-500/16 px-4 py-3 text-sm font-bold text-rose-100">{error}</p>}
-        <button className="mt-6 h-14 w-full rounded-2xl bg-white text-base font-black text-slate-950 shadow-[0_15px_45px_rgba(45,212,191,0.22)]">登录系统</button>
+        <button disabled={loading} className="mt-6 h-14 w-full rounded-2xl bg-white text-base font-black text-slate-950 shadow-[0_15px_45px_rgba(45,212,191,0.22)] disabled:cursor-not-allowed disabled:opacity-60">{loading ? "登录中..." : "登录系统"}</button>
         <div className="mt-5 grid grid-cols-4 gap-2 text-center text-xs font-bold text-slate-400">
           <span>admin / 123456</span>
           <span>buyer / 123456</span>

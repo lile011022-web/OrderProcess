@@ -6,16 +6,17 @@ import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { warehouseAddresses } from "../../data/mockData";
 import { requireCurrentUser } from "../../utils/auth";
+import { useApiList } from "../../utils/useApiList";
 
 export function CustomerWarehouses() {
   const user = requireCurrentUser();
-  const data = warehouseAddresses.filter((item) => item.owner === user.displayName);
+  const { data: addresses, loading, error } = useApiList(`/api/warehouses?owner=${encodeURIComponent(user.displayName)}`, warehouseAddresses.filter((item) => item.owner === user.displayName));
 
   return (
     <div>
       <PageHeader
         title="我的仓库地址"
-        desc="客户提交自己的美国收货地址，管理员审核启用后买手才能在回填时选择。"
+        desc={error || (loading ? "正在从后端加载我的仓库地址..." : "客户提交自己的美国收货地址，管理员审核启用后买手才能在回填时选择。")}
         actions={<button className="primary-btn flex items-center gap-2"><Plus size={18} />提交地址</button>}
       />
       <FilterBar>
@@ -38,7 +39,7 @@ export function CustomerWarehouses() {
         </div>
       </section>
       <DataTable
-        data={data}
+        data={addresses}
         columns={[
           { key: "name", title: "仓库名称", render: (row) => row.name },
           { key: "contact", title: "收货人", render: (row) => row.contactName },

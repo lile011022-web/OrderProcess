@@ -1,8 +1,8 @@
 # 球星卡采购接单对账系统
 
-版本：v1.1.0
+版本：v1.2.0
 
-这是面向球星卡采购、接单、包裹入库、费用核算、付款确认、异常处理和对账管理的前端原型。当前阶段不接真实后端，不调用真实接口，统一使用 `src/data/mockData.ts` 中的 mock data 模拟业务数据。
+这是面向球星卡采购、接单、包裹入库、费用核算、付款确认、异常处理和对账管理的业务系统。v1.2 已加入 SQLite 持久化后端、token 登录、角色校验、审计日志、凭证上传和核心页面 API 接入。
 
 仓库名称：OrderProcess。用途：个人记账、采购流程管理和球星卡供销对账。
 
@@ -26,14 +26,14 @@ npm run dev
 npm run build
 ```
 
-后端 mock API：
+后端 API：
 
 ```bash
 npm run backend:dev
 npm run backend:check
 ```
 
-后端默认监听 `http://127.0.0.1:7301`，部署说明见 [docs/backend-deployment.md](docs/backend-deployment.md)。
+后端默认监听 `http://127.0.0.1:7301`，默认 SQLite 数据文件在 `data/order-process.sqlite`，部署说明见 [docs/backend-deployment.md](docs/backend-deployment.md)。
 
 ## 原型账号
 
@@ -44,7 +44,7 @@ npm run backend:check
 | 仓库 | `warehouse` | `123456` | 待确认包裹 |
 | 客户 | `customer` | `123456` | 我的采购任务 |
 
-## v1.1 功能范围
+## v1.2 功能范围
 
 - 四种角色登录与不同菜单权限。
 - 管理员采购任务、买手接单、采购回填、付款确认、包裹管理、仓库收货、成本核算、报表和基础资料维护。
@@ -53,7 +53,8 @@ npm run backend:check
 - 仓库操作费集中计算：5 美元 / 包裹，0.5 美元 / 张照片，固定汇率 6.8。
 - 付款后先进入“已付待确认金额”，仓库确认收到后才转为“实际入库成本”。
 - 异常包裹独立记录退款或下次抵扣，不混入正常入库成本。
-- 新增 Node.js mock API 后端部署层，覆盖登录、菜单、采购、包裹、异常、费用和对账接口。
+- Node.js + SQLite 后端，覆盖登录、菜单、采购、包裹、异常、费用、对账、上传和审计接口。
+- 前端登录、采购任务、包裹、异常、成本核算、仓库收货、客户资料、买手付款等核心页面已接后端 API。
 
 ## 验收建议
 
@@ -76,5 +77,5 @@ src/
   routes/          路由与登录保护
   utils/           权限、登录态、费用、格式化等集中规则
   types.ts         核心业务类型
-server/            Node.js mock API 后端
+server/            Node.js SQLite API 后端
 ```

@@ -7,16 +7,17 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { productProfiles } from "../../data/mockData";
 import { requireCurrentUser } from "../../utils/auth";
 import { currency } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function CustomerProducts() {
   const user = requireCurrentUser();
-  const data = productProfiles.filter((item) => item.owner === user.displayName);
+  const { data: products, loading, error } = useApiList(`/api/products?owner=${encodeURIComponent(user.displayName)}`, productProfiles.filter((item) => item.owner === user.displayName));
 
   return (
     <div>
       <PageHeader
         title="我的商品资料"
-        desc="客户提交和维护自己的商品基础资料，提交后由管理员审核启用。"
+        desc={error || (loading ? "正在从后端加载我的商品资料..." : "客户提交和维护自己的商品基础资料，提交后由管理员审核启用。")}
         actions={<button className="primary-btn flex items-center gap-2"><Plus size={18} />提交商品</button>}
       />
       <FilterBar>
@@ -38,7 +39,7 @@ export function CustomerProducts() {
         </div>
       </section>
       <DataTable
-        data={data}
+        data={products}
         columns={[
           { key: "id", title: "商品编码", render: (row) => row.id },
           { key: "name", title: "商品名称", render: (row) => row.name },

@@ -35,6 +35,8 @@ npm run backend:check
 
 后端默认监听 `http://127.0.0.1:7301`，默认 SQLite 数据文件在 `data/order-process.sqlite`，部署说明见 [docs/backend-deployment.md](docs/backend-deployment.md)。
 
+阿里云服务器 `47.242.190.166` 部署说明见 [docs/aliyun-deployment.md](docs/aliyun-deployment.md)。
+
 ## 原型账号
 
 | 角色 | 用户名 | 密码 | 默认入口 |

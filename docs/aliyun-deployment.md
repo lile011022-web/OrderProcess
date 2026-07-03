@@ -1,0 +1,192 @@
+# 阿里云服务器部署说明
+
+目标服务器：`47.242.190.166`
+
+本项目推荐在服务器上使用：
+
+- Nginx：对外提供前端静态页面，并把 `/api` 和 `/health` 反向代理到后端。
+- systemd：守护 Node.js 后端服务。
+- SQLite：默认数据文件 `/opt/order-process/data/order-process.sqlite`。
+- 上传目录：`/opt/order-process/uploads`。
+
+## 1. 当前连接诊断
+
+从本机测试结果：
+
+- `47.242.190.166` 可以 ping 通。
+- TCP 端口 `22/80/443/7301/8080/3000` 能建立连接。
+- SSH 连接在 banner 阶段超时：`Connection timed out during banner exchange`。
+- HTTP 端口能建立连接但没有正常响应。
+
+这说明当前阻塞点不是 GitHub 或项目代码，而是服务器 SSH 服务、安全组、防火墙或端口代理状态。需要先在阿里云控制台确认：
+
+- ECS 安全组入方向允许你的当前公网 IP 访问 TCP `22`。
+- 服务器内 `sshd` 正常运行。
+- 端口 `22` 没有被其他程序占用或代理。
+- 如果 SSH 使用了非 22 端口，需要提供实际端口。
+
+## 2. 服务器准备
+
+登录服务器后，建议先确认系统：
+
+```bash
+uname -a
+cat /etc/os-release
+```
+
+安装基础组件：
+
+```bash
+apt-get update
+apt-get install -y git nginx curl ca-certificates
+```
+
+安装 Node.js 22+。后端依赖 Node 内置 SQLite，因此 Node 版本必须是 22 或更高：
+
+```bash
+node -v
+```
+
+如果还没安装 Node.js，可使用你常用方式安装 Node.js 22 LTS 或更新版本。
+
+## 3. 一键部署脚本
+
+在服务器上执行：
+
+```bash
+git clone https://github.com/lile011022-web/OrderProcess.git /opt/order-process
+cd /opt/order-process
+bash scripts/deploy_aliyun.sh
+```
+
+如果已经 clone 过：
+
+```bash
+cd /opt/order-process
+git pull --ff-only origin main
+bash scripts/deploy_aliyun.sh
+```
+
+脚本会完成：
+
+- 拉取最新代码。
+- 创建 `/etc/order-process/order-process.env`。
+- 自动生成 `TOKEN_SECRET`。
+- 安装 npm 依赖。
+- 使用同域 API 构建前端：`VITE_API_BASE_URL="" npm run build`。
+- 安装 systemd 服务：`order-process-backend`。
+- 安装 Nginx 配置。
+- 启动后端并 reload Nginx。
+
+## 4. systemd 服务
+
+服务文件位置：
+
+```text
+/etc/systemd/system/order-process-backend.service
+```
+
+仓库模板：
+
+```text
+deploy/order-process-backend.service
+```
+
+常用命令：
+
+```bash
+systemctl status order-process-backend
+journalctl -u order-process-backend -n 100 --no-pager
+systemctl restart order-process-backend
+```
+
+## 5. Nginx 配置
+
+仓库模板：
+
+```text
+deploy/order-process.nginx.conf
+```
+
+安装后位置：
+
+```text
+/etc/nginx/sites-available/order-process.conf
+/etc/nginx/sites-enabled/order-process.conf
+```
+
+检查并重载：
+
+```bash
+nginx -t
+systemctl reload nginx
+```
+
+## 6. 验证
+
+服务器本机验证：
+
+```bash
+curl http://127.0.0.1:7301/health
+curl http://127.0.0.1/health
+```
+
+公网验证：
+
+```bash
+curl http://47.242.190.166/health
+```
+
+浏览器访问：
+
+```text
+http://47.242.190.166
+```
+
+默认账号：
+
+| 角色 | 用户名 | 密码 |
+| --- | --- | --- |
+| 管理员 | `admin` | `123456` |
+| 买手 | `buyer` | `123456` |
+| 仓库 | `warehouse` | `123456` |
+| 客户 | `customer` | `123456` |
+
+生产使用前应尽快增加用户管理和改密功能，或至少修改初始密码生成逻辑。
+
+## 7. 数据与备份
+
+需要备份：
+
+```text
+/opt/order-process/data/order-process.sqlite
+/opt/order-process/uploads
+/etc/order-process/order-process.env
+```
+
+建议每天定时备份：
+
+```bash
+mkdir -p /opt/order-process-backups
+tar -czf /opt/order-process-backups/order-process-$(date +%F).tar.gz \
+  /opt/order-process/data \
+  /opt/order-process/uploads \
+  /etc/order-process/order-process.env
+```
+
+## 8. 当前需要你确认的信息
+
+为了让我直接完成远程部署，请提供以下任一方式：
+
+- SSH 用户名、端口、密码；或
+- SSH 用户名、端口、私钥路径；或
+- 阿里云控制台临时远程连接方式。
+
+当前我尝试过：
+
+```bash
+ssh root@47.242.190.166
+ssh admin@47.242.190.166
+```
+
+结果均为 SSH banner 阶段超时。

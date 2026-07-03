@@ -1,0 +1,19 @@
+[Unit]
+Description=OrderProcess Backend API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/order-process
+ExecStart=/usr/bin/node /opt/order-process/server/index.mjs
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=PORT=7301
+Environment=HOST=127.0.0.1
+Environment=DATA_DIR=/opt/order-process/data
+Environment=UPLOAD_DIR=/opt/order-process/uploads
+EnvironmentFile=-/etc/order-process/order-process.env
+
+[Install]
+WantedBy=multi-user.target

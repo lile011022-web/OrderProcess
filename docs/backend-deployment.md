@@ -66,7 +66,7 @@ API_BASE_URL=https://api.example.com npm run backend:check
 ## Docker 部署
 
 ```bash
-docker build -f Dockerfile.backend -t order-process-backend:1.1 .
+docker build -f Dockerfile.backend -t order-process-backend:1.2 .
 docker run -d \
   --name order-process-backend \
   --restart unless-stopped \
@@ -75,7 +75,7 @@ docker run -d \
   -e TOKEN_SECRET=replace-with-long-random-secret \
   -v order-process-data:/app/data \
   -v order-process-uploads:/app/uploads \
-  order-process-backend:1.1
+  order-process-backend:1.2
 ```
 
 验证：
@@ -139,3 +139,7 @@ location /health {
 - 当前内置四个初始账号，首次启动会写入 SQLite；后续应增加用户管理和改密流程。
 - 文件上传保存在本机目录；多服务器部署时建议迁移到对象存储。
 - 暂未接真实物流官网 API。
+
+## 阿里云 IP 部署
+
+部署到 `47.242.190.166` 的完整说明见 [aliyun-deployment.md](./aliyun-deployment.md)。

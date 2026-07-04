@@ -11,6 +11,7 @@ import { UploadBox } from "../../components/UploadBox";
 import { fillRecords } from "../../data/mockData";
 import type { BuyerFillRecord } from "../../types";
 import { inferCarrier, openTrackingByNumber } from "../../data/carrierConfig";
+import { apiRequest } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
 import { currency, dateText } from "../../utils/format";
 import { useApiList } from "../../utils/useApiList";
@@ -20,11 +21,43 @@ export function BuyerPayments() {
   const [toast, setToast] = useState("");
   const user = getCurrentUser();
   const endpoint = user?.role === "buyer" ? `/api/buyer-fill-records?buyer=${encodeURIComponent(user.displayName)}` : "/api/buyer-fill-records";
-  const { data: apiRecords, loading, error } = useApiList<BuyerFillRecord>(endpoint, user?.role === "buyer" ? fillRecords.filter((record) => record.buyer === user.displayName) : fillRecords);
+  const { data: apiRecords, loading, error, setData } = useApiList<BuyerFillRecord>(endpoint, user?.role === "buyer" ? fillRecords.filter((record) => record.buyer === user.displayName) : fillRecords);
   const visibleRecords = user?.role === "buyer" ? apiRecords.filter((record) => record.buyer === user.displayName) : apiRecords;
   const isBuyer = user?.role === "buyer";
   const paymentWord = isBuyer ? "收款" : "付款";
   const statusText = (value: string) => isBuyer ? value.replace(/付款/g, "收款").replace(/已付/g, "已收") : value;
+
+  async function review(row: BuyerFillRecord, approved: boolean) {
+    try {
+      const result = await apiRequest<{ data: BuyerFillRecord; message: string }>(`/api/buyer-fill-records/${row.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ approved }),
+      });
+      setData((records) => records.map((record) => record.id === row.id ? result.data : record));
+      setToast(result.message);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "审核失败");
+    } finally {
+      setTimeout(() => setToast(""), 2200);
+    }
+  }
+
+  async function pay(record: BuyerFillRecord, payload: Record<string, unknown>) {
+    try {
+      const result = await apiRequest<{ data: BuyerFillRecord; message: string }>(`/api/buyer-fill-records/${record.id}/payment`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setData((records) => records.map((item) => item.id === record.id ? result.data : item));
+      setSelected(null);
+      setToast(result.message);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : `${paymentWord}失败`);
+    } finally {
+      setTimeout(() => setToast(""), 2200);
+    }
+  }
+
   return (
     <div>
       <PageHeader title={isBuyer ? "买手收款" : "买手付款"} desc={error || (loading ? "正在从后端加载付款记录..." : isBuyer ? "查看采购回填对应的应收、已收与待确认状态。" : "审核买手回填记录，扣减异常待抵扣金额后完成付款。")} />
@@ -44,18 +77,18 @@ export function BuyerPayments() {
           { key: "eta", title: "仓库预计到达", render: (row) => row.warehouseEta ? dateText(row.warehouseEta) : "待仓库填写" },
           { key: "audit", title: "审核状态", render: (row) => <StatusBadge>{row.auditStatus}</StatusBadge> },
           { key: "pay", title: `${paymentWord}状态`, render: (row) => <StatusBadge>{statusText(row.payStatus)}</StatusBadge> },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn">审核</button><button className="primary-btn py-2" onClick={() => setSelected(row)}>{paymentWord}</button><button className="ghost-btn">驳回</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTrackingByNumber(row.trackingNo)}><ExternalLink size={16} /></button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn" onClick={() => review(row, true)}>审核</button><button className="primary-btn py-2" onClick={() => setSelected(row)}>{paymentWord}</button><button className="ghost-btn" onClick={() => review(row, false)}>驳回</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTrackingByNumber(row.trackingNo)}><ExternalLink size={16} /></button></div> },
         ]}
       />
       <Modal open={!!selected} title={`${paymentWord}处理`} onClose={() => setSelected(null)}>
-        {selected && <PaymentForm record={selected} paymentWord={paymentWord} onDone={() => { setSelected(null); setToast(`${paymentWord}已记录，状态进入${isBuyer ? "已收待确认" : "已付待确认"}`); setTimeout(() => setToast(""), 2200); }} />}
+        {selected && <PaymentForm record={selected} paymentWord={paymentWord} onDone={(payload) => pay(selected, payload)} />}
       </Modal>
       <Toast message={toast} />
     </div>
   );
 }
 
-function PaymentForm({ record, paymentWord, onDone }: { record: BuyerFillRecord; paymentWord: string; onDone: () => void }) {
+function PaymentForm({ record, paymentWord, onDone }: { record: BuyerFillRecord; paymentWord: string; onDone: (payload: Record<string, unknown>) => void }) {
   const [payQty, setPayQty] = useState(record.quantity);
   const deduction = 1800;
   const quantityRatio = Math.min(Math.max(payQty, 0), record.quantity) / record.quantity;
@@ -79,7 +112,7 @@ function PaymentForm({ record, paymentWord, onDone }: { record: BuyerFillRecord;
     </div>
     <UploadBox label={`${paymentWord}截图上传`} />
     <textarea className="soft-input min-h-24 w-full p-4" placeholder={`${paymentWord}备注`} />
-    <button className="primary-btn w-full" onClick={onDone}>确认{paymentWord}</button>
+    <button className="primary-btn w-full" onClick={() => onDone({ payQty, amount: Math.max(payable - deduction, 0), deduction, paymentAt: new Date().toISOString() })}>确认{paymentWord}</button>
   </div>;
 }
 

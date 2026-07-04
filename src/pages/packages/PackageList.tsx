@@ -9,12 +9,28 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { openTracking } from "../../data/carrierConfig";
 import { packages, photos } from "../../data/mockData";
 import type { PackageItem } from "../../types";
+import { apiRequest, updateRecordApi } from "../../utils/api";
 import { currency, dateText, paymentStatusText } from "../../utils/format";
 import { useApiList } from "../../utils/useApiList";
 
 export function PackageList() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
-  const { data, loading, error } = useApiList<PackageItem>("/api/packages", packages);
+  const { data, loading, error, setData } = useApiList<PackageItem>("/api/packages", packages);
+
+  async function markException(row: PackageItem) {
+    const result = await apiRequest<{ data: PackageItem; message: string }>(`/api/packages/${row.id}/mark-exception`, {
+      method: "POST",
+      body: JSON.stringify({ reason: "管理员标记包裹异常", amount: row.paidPendingConfirmAmount || row.exceptionAmount, resolution: "next_credit" }),
+    });
+    setData((rows) => rows.map((item) => item.id === row.id ? result.data : item));
+  }
+
+  async function editStatus(row: PackageItem) {
+    const nextStatus = row.status === "在途" ? "预计到达超时" : "在途";
+    const result = await updateRecordApi<PackageItem>("package", row.id, { status: nextStatus, overdue: nextStatus !== "在途" });
+    setData((rows) => rows.map((item) => item.id === row.id ? result.data : item));
+  }
+
   return (
     <div>
       <PageHeader title="包裹列表" desc={error || (loading ? "正在从后端加载包裹数据..." : "集中管理买手采购回填后的运单、预计到达、收货与异常。")} />
@@ -38,7 +54,7 @@ export function PackageList() {
           { key: "overdue", title: "是否超时", render: (row) => <StatusBadge>{row.overdue ? "超时" : "正常"}</StatusBadge> },
           { key: "status", title: "包裹状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
           { key: "warehouse", title: "仓库", render: (row) => row.warehouse },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn p-2" title="查看包裹详情" onClick={() => setSelected(row)}><Eye size={16} /></button><button className="ghost-btn">编辑</button><button className="ghost-btn">标记异常</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn p-2" title="查看包裹详情" onClick={() => setSelected(row)}><Eye size={16} /></button><button className="ghost-btn" onClick={() => editStatus(row)}>编辑</button><button className="ghost-btn" onClick={() => markException(row)}>标记异常</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button></div> },
         ]}
       />
       <Drawer open={!!selected} title="包裹详情" onClose={() => setSelected(null)}>

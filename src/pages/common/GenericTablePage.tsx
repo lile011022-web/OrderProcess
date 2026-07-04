@@ -7,6 +7,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { fillRecords, packages, tasks } from "../../data/mockData";
 import { currency, dateText } from "../../utils/format";
 import { openTracking } from "../../data/carrierConfig";
+import { downloadReportCsv } from "../../utils/api";
 
 type Variant = "tasks" | "buyers" | "packages" | "finance" | "reports" | "settings";
 
@@ -22,7 +23,7 @@ export function GenericTablePage({ title, desc, variant = "tasks" }: { title: st
 
   return (
     <div>
-      <PageHeader title={title} desc={desc ?? "第一版前端原型页面，使用 mock data 展示真实业务结构。"} actions={<button className="primary-btn">新增记录</button>} />
+      <PageHeader title={title} desc={desc ?? "业务数据已接入后端，报表页可导出 CSV。"} actions={<button className="primary-btn" onClick={() => downloadReportCsv(variant === "reports" ? "purchase" : variant)}>导出 CSV</button>} />
       <FilterBar>
         <SelectFilter label="状态" options={["待处理", "已完成", "异常", "待付款"]} />
         <SelectFilter label="时间范围" options={["今天", "本周", "本月"]} />

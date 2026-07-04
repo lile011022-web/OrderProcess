@@ -8,12 +8,29 @@ import { StatCard } from "../../components/StatCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { tasks } from "../../data/mockData";
 import type { PurchaseTask } from "../../types";
+import { createRecordApi, deleteRecordApi, updateRecordApi } from "../../utils/api";
 import { currency, dateText } from "../../utils/format";
 import { useApiList } from "../../utils/useApiList";
 
 export function PurchaseTasks() {
   const [selected, setSelected] = useState<PurchaseTask | null>(null);
-  const { data, loading, error } = useApiList<PurchaseTask>("/api/tasks", tasks);
+  const { data, loading, error, setData } = useApiList<PurchaseTask>("/api/tasks", tasks);
+
+  async function updateTask(row: PurchaseTask, patch: Partial<PurchaseTask>) {
+    const result = await updateRecordApi<PurchaseTask>("task", row.id, patch);
+    setData((rows) => rows.map((item) => item.id === row.id ? result.data : item));
+  }
+
+  async function copyTask(row: PurchaseTask) {
+    const result = await createRecordApi<PurchaseTask>("task", { ...row, id: undefined, status: "草稿", accepted: 0, purchased: 0, arrived: 0, buyer: "未分配" });
+    setData((rows) => [result.data, ...rows]);
+  }
+
+  async function removeTask(row: PurchaseTask) {
+    await deleteRecordApi<PurchaseTask>("task", row.id);
+    setData((rows) => rows.filter((item) => item.id !== row.id));
+  }
+
   return (
     <div>
       <PageHeader title="采购任务列表" desc={error || (loading ? "正在从后端加载采购任务..." : "查看采购任务进度、接单进度、到仓进度与超时状态。")} />
@@ -45,7 +62,7 @@ export function PurchaseTasks() {
           { key: "deadline", title: "截止时间", render: (row) => dateText(row.deadline) },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
           { key: "overdue", title: "是否超时", render: (row) => <StatusBadge>{row.overdue ? "超时" : "正常"}</StatusBadge> },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button onClick={() => setSelected(row)} className="ghost-btn p-2"><Eye size={16} /></button><button className="ghost-btn p-2"><Pencil size={16} /></button><button className="ghost-btn p-2"><Pause size={16} /></button><button className="ghost-btn p-2"><Square size={16} /></button><button className="ghost-btn p-2"><Copy size={16} /></button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button onClick={() => setSelected(row)} className="ghost-btn p-2"><Eye size={16} /></button><button className="ghost-btn p-2" onClick={() => updateTask(row, { status: "接单中" })}><Pencil size={16} /></button><button className="ghost-btn p-2" onClick={() => updateTask(row, { status: "已暂停" })}><Pause size={16} /></button><button className="ghost-btn p-2" onClick={() => updateTask(row, { status: "已完成", purchased: row.quantity, arrived: row.quantity })}><Square size={16} /></button><button className="ghost-btn p-2" onClick={() => copyTask(row)}><Copy size={16} /></button><button className="ghost-btn p-2" onClick={() => removeTask(row)}>删</button></div> },
         ]}
       />
       <Drawer open={!!selected} title="采购任务详情" onClose={() => setSelected(null)}>

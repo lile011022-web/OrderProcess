@@ -7,16 +7,38 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { Toast } from "../../components/Toast";
 import { tasks } from "../../data/mockData";
 import type { PurchaseTask } from "../../types";
+import { apiRequest } from "../../utils/api";
 import { currency, dateText } from "../../utils/format";
+import { useApiList } from "../../utils/useApiList";
 
 export function TaskHall() {
   const [selected, setSelected] = useState<PurchaseTask | null>(null);
+  const [acceptQty, setAcceptQty] = useState(10);
+  const [unitPrice, setUnitPrice] = useState(0);
   const [toast, setToast] = useState("");
+  const { data, loading, error, setData } = useApiList<PurchaseTask>("/api/tasks", tasks);
+
+  async function acceptTask(task: PurchaseTask) {
+    try {
+      const result = await apiRequest<{ data: PurchaseTask; message: string }>(`/api/tasks/${task.id}/accept`, {
+        method: "POST",
+        body: JSON.stringify({ quantity: acceptQty, unitPrice: unitPrice || task.targetPrice }),
+      });
+      setData((rows) => rows.map((row) => row.id === task.id ? result.data : row));
+      setSelected(null);
+      setToast(result.message);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "接单失败");
+    } finally {
+      setTimeout(() => setToast(""), 2200);
+    }
+  }
+
   return (
     <div>
-      <PageHeader title="任务大厅" desc="买手可查看剩余采购任务并主动接单。" />
+      <PageHeader title="任务大厅" desc={error || (loading ? "正在从后端加载任务大厅..." : "买手可查看剩余采购任务并主动接单。")} />
       <div className="grid grid-cols-3 gap-5">
-        {tasks.filter((task) => task.status !== "已完成").map((task) => (
+        {data.filter((task) => task.status !== "已完成" && task.quantity - task.accepted > 0).map((task) => (
           <article key={task.id} className="panel overflow-hidden">
             <img src={task.image} alt={task.productName} className="h-44 w-full object-cover" />
             <div className="p-5">
@@ -37,7 +59,7 @@ export function TaskHall() {
                 <Metric label="收货人" value={task.recipient} />
               </div>
               <p className="mt-4 min-h-12 text-sm font-semibold leading-6 text-slate-500">{task.requirement}</p>
-              <button onClick={() => setSelected(task)} className="primary-btn mt-5 flex w-full items-center justify-center gap-2"><ShoppingCart size={18} />接单</button>
+              <button onClick={() => { setSelected(task); setAcceptQty(Math.max(1, Math.min(10, task.quantity - task.accepted))); setUnitPrice(task.targetPrice); }} className="primary-btn mt-5 flex w-full items-center justify-center gap-2"><ShoppingCart size={18} />接单</button>
             </div>
           </article>
         ))}
@@ -49,12 +71,12 @@ export function TaskHall() {
             <p className="mt-1 flex items-center gap-2 text-sm font-bold text-slate-500"><Clock size={16} />{dateText(selected.deadline)} 截止</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="接单数量" type="number" placeholder="10" />
-            <Input label="预计采购单价" type="number" placeholder={String(selected.targetPrice)} />
+            <Input label="接单数量" type="number" min={1} max={selected.quantity - selected.accepted} value={acceptQty} onChange={(event) => setAcceptQty(Number(event.currentTarget.value))} />
+            <Input label="预计采购单价" type="number" value={unitPrice} onChange={(event) => setUnitPrice(Number(event.currentTarget.value))} placeholder={String(selected.targetPrice)} />
             <Input label="预计完成时间" type="datetime-local" />
             <Input label="接单备注" placeholder="可备注采购平台或货源" />
           </div>
-          <button className="primary-btn w-full" onClick={() => { setSelected(null); setToast("接单成功，已加入我的接单"); setTimeout(() => setToast(""), 2200); }}>确认接单</button>
+          <button className="primary-btn w-full" onClick={() => acceptTask(selected)}>确认接单</button>
         </div>}
       </Modal>
       <Toast message={toast} />

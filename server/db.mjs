@@ -183,6 +183,22 @@ export function saveRecord(kind, item, actor, action) {
   return item;
 }
 
+export function deleteRecord(kind, id, actor, action) {
+  const before = getRecord(kind, id);
+  if (!before) return null;
+  db.prepare("DELETE FROM records WHERE kind = ? AND id = ?").run(kind, id);
+  writeAudit({
+    actor: actor ? publicUser(actor).username : "system",
+    role: actor?.role || "system",
+    action,
+    targetKind: kind,
+    targetId: id,
+    before,
+    after: null,
+  });
+  return before;
+}
+
 export function writeAudit({ actor, role, action, targetKind, targetId, before, after }) {
   db.prepare(`
     INSERT INTO audit_logs (actor, role, action, target_kind, target_id, before_payload, after_payload)

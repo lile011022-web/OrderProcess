@@ -17,9 +17,14 @@ import { useApiList } from "../../utils/useApiList";
 export function WarehousePending() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
   const [etaSelected, setEtaSelected] = useState<PackageItem | null>(null);
+  const [etaValue, setEtaValue] = useState("");
+  const [etaNote, setEtaNote] = useState("");
+  const [query, setQuery] = useState("");
   const [toast, setToast] = useState("");
   const { data: packageRows, loading, error, setData } = useApiList<PackageItem>("/api/packages", packages);
-  const data = packageRows.filter((item) => item.status !== "已收货");
+  const data = packageRows
+    .filter((item) => item.status !== "已收货")
+    .filter((item) => !query.trim() || item.trackingNo.toLowerCase().includes(query.trim().toLowerCase()));
 
   async function confirmReceived(item: PackageItem) {
     try {
@@ -34,12 +39,43 @@ export function WarehousePending() {
     }
   }
 
+  async function saveEta(item: PackageItem) {
+    try {
+      const result = await apiRequest<{ data: PackageItem; message: string }>(`/api/packages/${item.id}/eta`, {
+        method: "POST",
+        body: JSON.stringify({ expectedAt: etaValue || item.expectedAt, note: etaNote }),
+      });
+      setData((rows) => rows.map((row) => row.id === item.id ? result.data : row));
+      setEtaSelected(null);
+      setToast(result.message);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "保存预计时间失败");
+    } finally {
+      setTimeout(() => setToast(""), 2200);
+    }
+  }
+
+  async function markMissing(item: PackageItem) {
+    try {
+      const result = await apiRequest<{ data: PackageItem; message: string }>(`/api/packages/${item.id}/mark-exception`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "仓库登记未收到包裹", owner: item.buyer, amount: item.paidPendingConfirmAmount, resolution: "next_credit" }),
+      });
+      setData((rows) => rows.map((row) => row.id === item.id ? result.data : row));
+      setToast(result.message);
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : "登记未收到失败");
+    } finally {
+      setTimeout(() => setToast(""), 2200);
+    }
+  }
+
   return (
     <div>
       <PageHeader title="待确认包裹" desc={error || (loading ? "正在从后端加载待确认包裹..." : "仓库扫描或输入运单号，确认包裹收到状态与实收数量。")} />
       <div className="panel mb-5 flex items-center gap-3 p-4">
         <ScanLine size={24} className="text-slate-500" />
-        <input className="h-14 flex-1 bg-transparent text-2xl font-black outline-none placeholder:text-slate-300" placeholder="扫描或输入运单号..." />
+        <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-14 flex-1 bg-transparent text-2xl font-black outline-none placeholder:text-slate-300" placeholder="扫描或输入运单号..." />
         <button className="primary-btn">搜索包裹</button>
       </div>
       <DataTable
@@ -47,14 +83,14 @@ export function WarehousePending() {
         columns={[
           { key: "tracking", title: "运单号", render: (row) => <button className="font-black text-sky-700" title="打开对应快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}>{row.trackingNo}</button> },
           { key: "carrier", title: "快递公司", render: (row) => row.carrier },
-          { key: "eta", title: "预计到达", render: (row) => <div><p>{dateText(row.expectedAt)}</p><button className="mt-1 text-xs font-black text-sky-700" onClick={() => setEtaSelected(row)}>仓库更新</button></div> },
+          { key: "eta", title: "预计到达", render: (row) => <div><p>{dateText(row.expectedAt)}</p><button className="mt-1 text-xs font-black text-sky-700" onClick={() => { setEtaSelected(row); setEtaValue(row.expectedAt?.slice(0, 16) || ""); setEtaNote(""); }}>仓库更新</button></div> },
           { key: "overdue", title: "是否超时", render: (row) => <StatusBadge>{row.overdue ? "超时" : "正常"}</StatusBadge> },
           { key: "product", title: "商品摘要", render: (row) => row.product },
           { key: "qty", title: "应收数量", render: (row) => row.productQty },
           { key: "buyer", title: "买手", render: (row) => row.buyer },
           { key: "warehouse", title: "仓库", render: (row) => row.warehouse },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="primary-btn py-2" onClick={() => setSelected(row)}>确认收到</button><button className="ghost-btn">未收到</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button><button className="ghost-btn p-2" title="上传包裹照片"><Camera size={16} /></button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="primary-btn py-2" onClick={() => setSelected(row)}>确认收到</button><button className="ghost-btn" onClick={() => markMissing(row)}>未收到</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button><button className="ghost-btn p-2" title="上传包裹照片"><Camera size={16} /></button></div> },
         ]}
       />
       <Modal open={!!etaSelected} title="填写预计送达时间" onClose={() => setEtaSelected(null)}>
@@ -63,9 +99,9 @@ export function WarehousePending() {
             <p className="text-xs font-black text-slate-400">运单号</p>
             <p className="mt-2 font-black text-ink">{etaSelected.trackingNo}</p>
           </div>
-          <Input label="预计送达时间" type="datetime-local" />
-          <textarea className="soft-input min-h-24 w-full p-4" placeholder="官网查询结果或仓库备注" />
-          <button className="primary-btn w-full" onClick={() => { setEtaSelected(null); setToast("预计送达时间已由仓库记录"); setTimeout(() => setToast(""), 2200); }}>保存预计时间</button>
+          <Input label="预计送达时间" type="datetime-local" value={etaValue} onChange={(event) => setEtaValue(event.currentTarget.value)} />
+          <textarea value={etaNote} onChange={(event) => setEtaNote(event.target.value)} className="soft-input min-h-24 w-full p-4" placeholder="官网查询结果或仓库备注" />
+          <button className="primary-btn w-full" onClick={() => saveEta(etaSelected)}>保存预计时间</button>
         </div>}
       </Modal>
       <Modal open={!!selected} title="确认收到包裹" onClose={() => setSelected(null)}>

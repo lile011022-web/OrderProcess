@@ -5,15 +5,18 @@ import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
 import { fillRecords, packages, trendData } from "../data/mockData";
+import { downloadReportCsv } from "../utils/api";
 import { currency } from "../utils/format";
+import { useNavigate } from "react-router-dom";
 
 export function Dashboard() {
+  const navigate = useNavigate();
   return (
     <div>
       <PageHeader
         title="首页总览"
         desc="采购、付款、物流、仓库、异常和成本的一屏总览。"
-        actions={<><button className="ghost-btn">导出本月报表</button><button className="primary-btn">发布采购任务</button></>}
+        actions={<><button className="ghost-btn" onClick={() => downloadReportCsv("monthly")}>导出本月报表</button><button className="primary-btn" onClick={() => navigate("/purchase/tasks/new")}>发布采购任务</button></>}
       />
       <div className="grid grid-cols-4 gap-5">
         <StatCard title="本月已付买手金额" value={currency(224800)} hint="较上月 +12.6%" icon={Banknote} tone="green" />

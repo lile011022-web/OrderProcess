@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { apiRequest, type ListResponse } from "./api";
 
 export function useApiList<T>(path: string, fallback: T[]) {
   const [data, setData] = useState<T[]>(fallback);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => setReloadKey((value) => value + 1), []);
 
   useEffect(() => {
     let active = true;
@@ -24,7 +27,7 @@ export function useApiList<T>(path: string, fallback: T[]) {
     return () => {
       active = false;
     };
-  }, [path]);
+  }, [path, reloadKey]);
 
-  return { data, loading, error, setData };
+  return { data, loading, error, setData, reload };
 }

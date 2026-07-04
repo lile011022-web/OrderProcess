@@ -61,6 +61,43 @@ export function changePasswordApi(username: string, role: Role, oldPassword: str
   });
 }
 
+export function createRecordApi<T>(kind: string, payload: Partial<T>) {
+  return apiRequest<{ data: T }>(`/api/records/${kind}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateRecordApi<T>(kind: string, id: string, payload: Partial<T>) {
+  return apiRequest<{ data: T }>(`/api/records/${kind}/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteRecordApi<T>(kind: string, id: string) {
+  return apiRequest<{ data: T }>(`/api/records/${kind}/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function downloadReportCsv(reportType: string) {
+  const headers = new Headers();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}/api/reports/${reportType}.csv`, { headers });
+  if (!response.ok) throw new ApiError(response.status, "报表导出失败");
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `order-process-${reportType}-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export type ListResponse<T> = {
   data: T[];
   total: number;

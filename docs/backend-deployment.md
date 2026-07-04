@@ -72,9 +72,16 @@ CLEAR_AUDIT=true npm run backend:clear-business-data
 | `GET` | `/api/auth/me` | 当前登录用户 |
 | `GET` | `/api/navigation?role=admin` | 按角色获取菜单 |
 | `GET` | `/api/tasks` | 采购任务 |
+| `POST` | `/api/tasks` | 发布采购任务 |
+| `POST` | `/api/tasks/:id/accept` | 买手接单并生成接单记录 |
 | `GET` | `/api/buyer-fill-records` | 买手回填 |
+| `POST` | `/api/buyer-fill-records` | 提交采购回填并生成包裹 |
+| `POST` | `/api/buyer-fill-records/:id/review` | 管理员审核或驳回回填 |
+| `POST` | `/api/buyer-fill-records/:id/payment` | 管理员付款，金额进入已付待确认 |
 | `GET` | `/api/packages` | 包裹列表 |
 | `POST` | `/api/packages/:id/confirm-received` | 仓库确认收货，待确认金额转实际入库成本 |
+| `POST` | `/api/packages/:id/eta` | 仓库更新预计到达时间 |
+| `POST` | `/api/packages/:id/mark-exception` | 登记未收到或异常包裹 |
 | `GET` | `/api/packages/exceptions` | 异常包裹 |
 | `POST` | `/api/packages/exceptions/:id/resolve` | 保存异常处理结果 |
 | `GET` | `/api/reconciliation` | 对账记录 |
@@ -85,6 +92,29 @@ CLEAR_AUDIT=true npm run backend:clear-business-data
 | `POST` | `/api/uploads` | 上传图片/PDF 凭证 |
 | `GET` | `/api/uploads?targetKind=package&targetId=...` | 查看凭证 |
 | `GET` | `/api/audit-logs` | 审计日志，管理员可用 |
+| `POST` | `/api/records/:kind` | 通用创建记录，支持 task/product/warehouse 等 |
+| `PATCH` | `/api/records/:kind/:id` | 通用更新记录 |
+| `DELETE` | `/api/records/:kind/:id` | 通用删除记录 |
+| `GET` | `/api/reports/:type.csv` | 导出 CSV 报表 |
+
+## v1.3 真实业务验证
+
+建议用临时库或生产库按以下顺序验证：
+
+```bash
+curl http://127.0.0.1:7301/health
+```
+
+页面验证：
+
+- 管理员登录，进入“发布采购任务”，提交后在“采购任务列表”可见。
+- 买手登录，进入“任务大厅”接单，接单后会生成买手回填/付款记录。
+- 买手进入“买手采购回填”，提交运单号后会生成待处理包裹。
+- 管理员进入“买手付款”，审核并付款后，包裹金额进入“已付待确认”。
+- 仓库进入“待确认包裹”，更新 ETA 或确认收到；确认收到后金额进入“实际入库成本”。
+- 管理员在“包裹列表”标记异常，异常包裹页面可处理退款或下次抵扣。
+- 客户提交商品资料和仓库地址，管理员在基础资料页面审核启用。
+- 报表页面导出 CSV，确认浏览器下载文件。
 
 ## Docker 部署
 

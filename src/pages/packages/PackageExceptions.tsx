@@ -9,14 +9,30 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { openTracking } from "../../data/carrierConfig";
 import { packageExceptions } from "../../data/mockData";
 import type { PackageException } from "../../types";
+import { apiRequest } from "../../utils/api";
 import { currency, dateText, exceptionResolutionText, exceptionStatusText } from "../../utils/format";
 import { useApiList } from "../../utils/useApiList";
 
 export function PackageExceptions() {
   const [selected, setSelected] = useState<PackageException | null>(null);
-  const { data, loading, error } = useApiList<PackageException>("/api/packages/exceptions", packageExceptions);
+  const [note, setNote] = useState("");
+  const [resolution, setResolution] = useState<PackageException["resolution"]>("next_credit");
+  const { data, loading, error, setData } = useApiList<PackageException>("/api/packages/exceptions", packageExceptions);
   const refundAmount = data.filter((item) => item.resolution === "refund").reduce((sum, item) => sum + item.amount, 0);
   const creditAmount = data.filter((item) => item.resolution === "next_credit").reduce((sum, item) => sum + item.amount, 0);
+
+  async function resolveException(item: PackageException) {
+    try {
+      const result = await apiRequest<{ data: PackageException; message: string }>(`/api/packages/exceptions/${item.id}/resolve`, {
+        method: "POST",
+        body: JSON.stringify({ resolution, note }),
+      });
+      setData((rows) => rows.map((row) => row.id === item.id ? result.data : row));
+      setSelected(null);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : "保存异常处理失败");
+    }
+  }
 
   return (
     <div>
@@ -44,7 +60,7 @@ export function PackageExceptions() {
           { key: "amount", title: "异常金额", render: (row) => currency(row.amount) },
           { key: "resolution", title: "处理方式", render: (row) => <StatusBadge>{exceptionResolutionText[row.resolution]}</StatusBadge> },
           { key: "status", title: "处理状态", render: (row) => <StatusBadge>{exceptionStatusText[row.status]}</StatusBadge> },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="primary-btn py-2" onClick={() => setSelected(row)}>处理</button><button className="ghost-btn p-2" title="官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="primary-btn py-2" onClick={() => { setSelected(row); setNote(row.note); setResolution(row.resolution); }}>处理</button><button className="ghost-btn p-2" title="官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button></div> },
         ]}
       />
       <Modal open={!!selected} title="异常处理" onClose={() => setSelected(null)}>
@@ -61,8 +77,12 @@ export function PackageExceptions() {
               <Info label="责任方/处理人" value={selected.owner} />
               <Info label="凭证信息" value={selected.evidence} />
             </div>
-            <textarea className="soft-input min-h-28 w-full p-4" defaultValue={selected.note} />
-            <button className="primary-btn w-full" onClick={() => setSelected(null)}>保存处理结果</button>
+            <select value={resolution} onChange={(event) => setResolution(event.target.value as PackageException["resolution"])} className="soft-input h-12 w-full px-4">
+              <option value="refund">退款</option>
+              <option value="next_credit">下次抵扣</option>
+            </select>
+            <textarea className="soft-input min-h-28 w-full p-4" value={note} onChange={(event) => setNote(event.target.value)} />
+            <button className="primary-btn w-full" onClick={() => resolveException(selected)}>保存处理结果</button>
           </div>
         )}
       </Modal>

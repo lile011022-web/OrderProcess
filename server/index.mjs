@@ -24,7 +24,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
-const APP_VERSION = process.env.APP_VERSION || "1.3.0";
+const APP_VERSION = process.env.APP_VERSION || "1.3.1";
 const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_MAX_ATTEMPTS = Number(process.env.AUTH_RATE_LIMIT_MAX || 8);
 const authAttempts = new Map();
@@ -208,6 +208,12 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(number) ? Math.max(0, number) : fallback;
 }
 
+function warehouseContactName(warehouseName) {
+  const name = cleanText(warehouseName);
+  if (!name) return "";
+  return listRecords("warehouse").find((warehouse) => warehouse.name === name)?.contactName || "";
+}
+
 function normalizeRecord(kind, body, user, existing = null) {
   const now = new Date().toISOString();
   if (kind === "task") {
@@ -240,6 +246,7 @@ function normalizeRecord(kind, body, user, existing = null) {
     const quantity = Math.max(1, cleanNumber(body.quantity, existing?.quantity || 1));
     const unitPrice = cleanNumber(body.unitPrice, existing?.unitPrice || 0);
     const settlement = cleanNumber(body.settlement, existing?.settlement || quantity * unitPrice);
+    const warehouse = cleanText(body.warehouse, existing?.warehouse || "");
     return {
       ...existing,
       id: existing?.id || body.id || makeId("buyerFillRecord"),
@@ -248,11 +255,17 @@ function normalizeRecord(kind, body, user, existing = null) {
       productName: cleanText(body.productName, existing?.productName || "未命名商品"),
       quantity,
       unitPrice,
+      tax: cleanNumber(body.tax, existing?.tax || 0),
+      domesticShipping: cleanNumber(body.domesticShipping, existing?.domesticShipping || 0),
+      serviceFee: cleanNumber(body.serviceFee, existing?.serviceFee || 0),
       settlement,
       overPrice: Boolean(body.overPrice ?? existing?.overPrice ?? false),
       trackingNo: cleanText(body.trackingNo, existing?.trackingNo || ""),
-      recipient: cleanText(body.recipient, existing?.recipient || ""),
-      warehouse: cleanText(body.warehouse, existing?.warehouse || ""),
+      platform: cleanText(body.platform, existing?.platform || "whatnot"),
+      platformOrderNo: cleanText(body.platformOrderNo, existing?.platformOrderNo || ""),
+      note: cleanText(body.note, existing?.note || ""),
+      recipient: cleanText(body.recipient, existing?.recipient || warehouseContactName(warehouse)),
+      warehouse,
       warehouseEta: body.warehouseEta || existing?.warehouseEta || "",
       auditStatus: cleanText(body.auditStatus, existing?.auditStatus || "待审核"),
       payStatus: cleanText(body.payStatus, existing?.payStatus || "待付款"),

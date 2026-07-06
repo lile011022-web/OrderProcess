@@ -112,7 +112,24 @@ export function Field({ label, placeholder, textarea, type = "text", ...props }:
 }
 
 export function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) {
-  return <label><span className="mb-2 block text-sm font-bold text-slate-600">{label}</span><input type="number" value={value} onChange={(e) => onChange(Number(e.target.value))} className="soft-input h-12 w-full px-4" /></label>;
+  return (
+    <label>
+      <span className="mb-2 block text-sm font-bold text-slate-600">{label}</span>
+      <input
+        inputMode="numeric"
+        value={String(value)}
+        onChange={(event) => onChange(normalizeWholeNumber(event.target.value))}
+        onBlur={(event) => onChange(normalizeWholeNumber(event.target.value))}
+        className="soft-input h-12 w-full px-4"
+      />
+    </label>
+  );
+}
+
+function normalizeWholeNumber(value: string) {
+  const digits = value.replace(/[^\d]/g, "");
+  if (!digits) return 0;
+  return Number(digits.replace(/^0+(?=\d)/, ""));
 }
 
 export function Toggle({ label, defaultChecked }: { label: string; defaultChecked?: boolean }) {

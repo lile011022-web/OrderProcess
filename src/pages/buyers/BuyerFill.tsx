@@ -14,9 +14,9 @@ export function BuyerFill() {
   const user = requireCurrentUser();
   const [qty, setQty] = useState(16);
   const [price, setPrice] = useState(1658);
-  const [tax, setTax] = useState(360);
-  const [shipping, setShipping] = useState(420);
-  const [service, setService] = useState(650);
+  const [tax, setTax] = useState(0);
+  const [shipping, setShipping] = useState(0);
+  const [service, setService] = useState(0);
   const [trackingNo, setTrackingNo] = useState("1Z999AA10123456784");
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState(false);
@@ -37,10 +37,16 @@ export function BuyerFill() {
           productName: form.get("productName"),
           quantity: qty,
           unitPrice: price,
+          tax,
+          domesticShipping: shipping,
+          serviceFee: service,
           settlement,
           overPrice: false,
           trackingNo,
-          recipient: form.get("recipient"),
+          platform: form.get("platform"),
+          platformOrderNo: form.get("platformOrderNo"),
+          note: form.get("note"),
+          recipient: String(form.get("recipient") || "").trim(),
           warehouse: form.get("warehouse"),
           warehouseEta: form.get("warehouseEta"),
           auditStatus: "待审核",
@@ -70,7 +76,7 @@ export function BuyerFill() {
           <NumberField label="美国境内运费" value={shipping} onChange={setShipping} />
           <NumberField label="买手服务费" value={service} onChange={setService} />
           <div className="rounded-3xl bg-violet-50 p-4"><p className="text-sm font-bold text-violet-700">结算金额</p><p className="mt-2 text-xl font-black text-violet-900">{currency(settlement)}</p></div>
-          <Field name="platform" label="采购平台" placeholder="eBay" />
+          <Field name="platform" label="采购平台" defaultValue="whatnot" placeholder="whatnot" />
           <Field name="platformOrderNo" label="平台订单号" placeholder="EB-4456981" />
           <Field name="note" label="采购备注" textarea placeholder="订单拆分、超价原因或卖家说明" />
         </FormCard>

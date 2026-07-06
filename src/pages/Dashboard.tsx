@@ -4,13 +4,22 @@ import { DataTable } from "../components/DataTable";
 import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { StatusBadge } from "../components/StatusBadge";
+import { Toast } from "../components/Toast";
 import { fillRecords, packages, trendData } from "../data/mockData";
 import { downloadReportCsv } from "../utils/api";
 import { currency } from "../utils/format";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const [toast, setToast] = useState("");
+
+  function showYearRange() {
+    setToast("当前趋势图已按本年维度展示");
+    setTimeout(() => setToast(""), 2200);
+  }
+
   return (
     <div>
       <PageHeader
@@ -38,7 +47,7 @@ export function Dashboard() {
               <h2 className="text-xl font-black text-ink">采购金额趋势</h2>
               <p className="text-sm font-semibold text-slate-500">已付款金额与实际入库成本对比</p>
             </div>
-            <button className="ghost-btn">本年</button>
+            <button className="ghost-btn" onClick={showYearRange}>本年</button>
           </div>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -101,6 +110,7 @@ export function Dashboard() {
           </div>
         </section>
       </div>
+      <Toast message={toast} />
     </div>
   );
 }

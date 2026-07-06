@@ -1,21 +1,31 @@
 import { Plus } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { DataTable } from "../../components/DataTable";
+import { Drawer } from "../../components/Drawer";
 import { FilterBar, SelectFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { StatCard } from "../../components/StatCard";
 import { StatusBadge } from "../../components/StatusBadge";
 import { tasks } from "../../data/mockData";
+import type { PurchaseTask } from "../../types";
+import { createRecordApi } from "../../utils/api";
 import { requireCurrentUser } from "../../utils/auth";
 import { currency, dateText } from "../../utils/format";
 import { useApiList } from "../../utils/useApiList";
 
 export function CustomerTasks() {
   const user = requireCurrentUser();
-  const { data, loading, error } = useApiList(`/api/tasks?role=customer&owner=${encodeURIComponent(user.displayName)}`, tasks.filter((task) => task.requester === user.displayName));
+  const [selected, setSelected] = useState<PurchaseTask | null>(null);
+  const { data, loading, error, setData } = useApiList<PurchaseTask>(`/api/tasks?role=customer&owner=${encodeURIComponent(user.displayName)}`, tasks.filter((task) => task.requester === user.displayName));
   const published = data.filter((task) => task.status === "已发布").length;
   const accepting = data.filter((task) => task.status === "接单中").length;
   const totalBudget = data.reduce((sum, task) => sum + task.targetPrice * task.quantity, 0);
+
+  async function copyTask(row: PurchaseTask) {
+    const result = await createRecordApi<PurchaseTask>("task", { ...row, id: undefined, status: "草稿", accepted: 0, purchased: 0, arrived: 0, buyer: "未分配" });
+    setData((rows) => [result.data, ...rows]);
+  }
 
   return (
     <div>
@@ -48,9 +58,23 @@ export function CustomerTasks() {
           { key: "warehouse", title: "收货仓库", render: (row) => row.warehouse },
           { key: "deadline", title: "截止时间", render: (row) => dateText(row.deadline) },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
-          { key: "actions", title: "操作", render: () => <div className="flex gap-2"><button className="ghost-btn">查看进度</button><button className="ghost-btn">复制再发</button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn" onClick={() => setSelected(row)}>查看进度</button><button className="ghost-btn" onClick={() => copyTask(row)}>复制再发</button></div> },
         ]}
       />
+      <Drawer open={!!selected} title="任务进度" onClose={() => setSelected(null)}>
+        {selected && <div className="space-y-4">
+          <Info label="商品" value={selected.productName} />
+          <Info label="已接数量" value={`${selected.accepted} / ${selected.quantity}`} />
+          <Info label="已采购" value={`${selected.purchased}`} />
+          <Info label="已到仓" value={`${selected.arrived}`} />
+          <Info label="当前买手" value={selected.buyer} />
+          <Info label="状态" value={selected.status} />
+        </div>}
+      </Drawer>
     </div>
   );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-3xl bg-slate-50 p-4"><p className="text-xs font-black text-slate-400">{label}</p><p className="mt-2 font-black text-ink">{value}</p></div>;
 }

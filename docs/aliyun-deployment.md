@@ -173,7 +173,21 @@ curl http://127.0.0.1/health
 
 该命令不会删除四个登录账号，只会清除采购、包裹、异常、商品资料、仓库地址、对账和上传凭证等业务测试数据。
 
-## 8. 防破解与安全组
+## 8. 导入最新地址
+
+部署 v1.3.2 后，如果服务器已有旧数据库，需要补导 `最新地址.docx` 中的 7 个美国仓库地址：
+
+```bash
+cd /opt/order-process
+git pull --ff-only origin main
+bash scripts/deploy_aliyun.sh
+SEED_DEMO_DATA=false npm run backend:import-latest-addresses
+systemctl restart order-process-backend
+```
+
+导入后用管理员登录，进入“仓库地址”，确认 DE Newark、DE Bear、DE Wilmington、PA Philadelphia 等最新地址都为“启用”。
+
+## 9. 防破解与安全组
 
 必须确认：
 
@@ -186,7 +200,7 @@ curl http://127.0.0.1/health
 
 系统已经增加登录/改密限流、强密码校验、Nginx 限流、安全响应头和 systemd 基础沙箱，但任何公网系统都不能承诺绝对不会被破解。安全组、强密码、HTTPS、备份和持续更新必须一起做。
 
-## 9. 数据与备份
+## 10. 数据与备份
 
 需要备份：
 
@@ -206,7 +220,7 @@ tar -czf /opt/order-process-backups/order-process-$(date +%F).tar.gz \
   /etc/order-process/order-process.env
 ```
 
-## 10. 当前需要你确认的信息
+## 11. 当前需要你确认的信息
 
 为了让我直接完成远程部署，请提供以下任一方式：
 

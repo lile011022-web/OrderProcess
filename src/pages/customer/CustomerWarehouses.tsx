@@ -43,13 +43,13 @@ export function CustomerWarehouses() {
       <PageHeader
         title="我的仓库地址"
         desc={error || (loading ? "正在从后端加载我的仓库地址..." : "客户提交自己的美国收货地址，管理员审核启用后买手才能在回填时选择。")}
-        actions={<button className="primary-btn flex items-center gap-2"><Plus size={18} />提交地址</button>}
+        actions={<button className="primary-btn flex items-center gap-2" onClick={() => document.getElementById("customer-warehouse-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Plus size={18} />提交地址</button>}
       />
       <FilterBar>
         <SelectFilter label="审核状态" options={["待审核", "启用", "停用"]} />
         <SelectFilter label="州/地区" options={["CA", "NY", "TX", "OR"]} />
       </FilterBar>
-      <form className="panel mb-5 p-5" onSubmit={submit}>
+      <form id="customer-warehouse-form" className="panel mb-5 p-5" onSubmit={submit}>
         <h2 className="text-lg font-black text-ink">美国地址提交</h2>
         <div className="mt-4 grid grid-cols-4 gap-4">
           <Input name="name" label="仓库名称" placeholder="纽约中转仓" required />

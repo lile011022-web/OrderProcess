@@ -7,6 +7,9 @@ export type Column<T> = {
 };
 
 export function DataTable<T>({ columns, data }: { columns: Column<T>[]; data: T[] }) {
+  const hasPreviousPage = false;
+  const hasNextPage = false;
+
   return (
     <div className="panel overflow-hidden">
       <table className="w-full border-separate border-spacing-0 text-left text-sm">
@@ -26,9 +29,9 @@ export function DataTable<T>({ columns, data }: { columns: Column<T>[]; data: T[
       <div className="flex items-center justify-between px-5 py-4 text-sm font-bold text-slate-400">
         <span>共 {data.length} 条记录</span>
         <div className="flex gap-2">
-          <button className="ghost-btn px-3 py-2">上一页</button>
+          <button className="ghost-btn px-3 py-2 disabled:cursor-not-allowed disabled:opacity-45" disabled={!hasPreviousPage}>上一页</button>
           <button className="ghost-btn bg-slate-900 px-3 py-2 text-white">1</button>
-          <button className="ghost-btn px-3 py-2">下一页</button>
+          <button className="ghost-btn px-3 py-2 disabled:cursor-not-allowed disabled:opacity-45" disabled={!hasNextPage}>下一页</button>
         </div>
       </div>
     </div>

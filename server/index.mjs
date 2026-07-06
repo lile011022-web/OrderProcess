@@ -24,7 +24,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
-const APP_VERSION = process.env.APP_VERSION || "1.3.1";
+const APP_VERSION = process.env.APP_VERSION || "1.3.2";
 const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_MAX_ATTEMPTS = Number(process.env.AUTH_RATE_LIMIT_MAX || 8);
 const authAttempts = new Map();
@@ -564,7 +564,7 @@ async function route(req, res) {
     const body = await readJson(req);
     if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
     const record = normalizeRecord("buyerFillRecord", { ...body, buyer: user.role === "buyer" ? user.displayName : body.buyer }, user);
-    const saved = saveRecord("buyerFillRecord", record, user, "buyerFillRecord.submit");
+    let saved = saveRecord("buyerFillRecord", record, user, "buyerFillRecord.submit");
     let packageItem = null;
     if (record.trackingNo) {
       packageItem = normalizeRecord("package", {
@@ -581,7 +581,8 @@ async function route(req, res) {
         inboundCost: 0,
         paymentStatus: "unpaid",
       }, user);
-      saveRecord("package", packageItem, user, "package.createFromBuyerFill");
+      packageItem = saveRecord("package", packageItem, user, "package.createFromBuyerFill");
+      saved = saveRecord("buyerFillRecord", { ...saved, packageId: packageItem.id }, user, "buyerFillRecord.linkPackage");
     }
     return json(res, 201, { data: saved, package: packageItem, message: "采购回填已提交，已生成待处理包裹" });
   }
@@ -616,7 +617,12 @@ async function route(req, res) {
     record.paymentAt = body.paymentAt || new Date().toISOString();
     const saved = saveRecord("buyerFillRecord", record, user, "buyerFillRecord.payment");
     const packageRows = listRecords("package");
-    const packageItem = packageRows.find((item) => item.trackingNo === record.trackingNo);
+    const matchedPackages = packageRows.filter((item) =>
+      item.trackingNo === record.trackingNo
+      && item.buyer === record.buyer
+      && (!record.productName || String(item.product || "").includes(record.productName))
+    );
+    const packageItem = (record.packageId && getRecord("package", record.packageId)) || matchedPackages.at(-1) || packageRows.find((item) => item.trackingNo === record.trackingNo);
     let savedPackage = null;
     if (packageItem) {
       packageItem.paidAmount = amount;

@@ -5,6 +5,7 @@ import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { UploadBox } from "../../components/UploadBox";
+import { Toast } from "../../components/Toast";
 import { packages, photos } from "../../data/mockData";
 import { openTracking } from "../../data/carrierConfig";
 import type { PackageItem } from "../../types";
@@ -13,6 +14,7 @@ import { useApiList } from "../../utils/useApiList";
 
 export function WarehouseReceived() {
   const [selected, setSelected] = useState<PackageItem | null>(null);
+  const [toast, setToast] = useState("");
   const { data: packageRows, loading, error } = useApiList<PackageItem>(`/api/packages?status=${encodeURIComponent("已收货")}`, packages.filter((item) => item.status === "已收货"));
   const data = packageRows.filter((item) => item.status === "已收货");
 
@@ -55,9 +57,10 @@ export function WarehouseReceived() {
               </div>
             ))}
           </div>
-          <button className="primary-btn w-full" onClick={() => setSelected(null)}><Camera className="inline" size={18} /> 保存照片</button>
+          <button className="primary-btn w-full" onClick={() => { setSelected(null); setToast("照片记录已保存到当前包裹"); setTimeout(() => setToast(""), 2200); }}><Camera className="inline" size={18} /> 保存照片</button>
         </div>}
       </Modal>
+      <Toast message={toast} />
     </div>
   );
 }

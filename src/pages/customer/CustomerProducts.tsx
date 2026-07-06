@@ -40,13 +40,13 @@ export function CustomerProducts() {
       <PageHeader
         title="我的商品资料"
         desc={error || (loading ? "正在从后端加载我的商品资料..." : "客户提交和维护自己的商品基础资料，提交后由管理员审核启用。")}
-        actions={<button className="primary-btn flex items-center gap-2"><Plus size={18} />提交商品</button>}
+        actions={<button className="primary-btn flex items-center gap-2" onClick={() => document.getElementById("customer-product-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Plus size={18} />提交商品</button>}
       />
       <FilterBar>
         <SelectFilter label="审核状态" options={["待审核", "启用", "停用"]} />
         <SelectFilter label="商品分类" options={["篮球卡盒", "棒球卡盒", "足球卡盒"]} />
       </FilterBar>
-      <form className="panel mb-5 p-5" onSubmit={submit}>
+      <form id="customer-product-form" className="panel mb-5 p-5" onSubmit={submit}>
         <h2 className="text-lg font-black text-ink">商品资料提交</h2>
         <div className="mt-4 grid grid-cols-4 gap-4">
           <Input name="name" label="商品名称" placeholder="2023-24 Prizm Basketball Mega" required />

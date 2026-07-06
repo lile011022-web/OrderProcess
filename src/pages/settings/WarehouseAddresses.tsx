@@ -38,12 +38,12 @@ export function WarehouseAddresses() {
 
   return (
     <div>
-      <PageHeader title="仓库地址" desc={error || (loading ? "正在从后端加载仓库地址..." : "管理员统一维护仓库地址，客户可提交地址资料；买手回填时从已启用地址中下拉选择。")} actions={<button className="primary-btn flex items-center gap-2"><Plus size={18} />新增地址</button>} />
+      <PageHeader title="仓库地址" desc={error || (loading ? "正在从后端加载仓库地址..." : "管理员统一维护仓库地址，客户可提交地址资料；买手回填时从已启用地址中下拉选择。")} actions={<button className="primary-btn flex items-center gap-2" onClick={() => document.getElementById("admin-warehouse-form")?.scrollIntoView({ behavior: "smooth", block: "center" })}><Plus size={18} />新增地址</button>} />
       <FilterBar>
         <SelectFilter label="状态" options={["启用", "待审核", "停用"]} />
         <SelectFilter label="州/地区" options={["CA", "NY", "TX", "OR"]} />
       </FilterBar>
-      <form className="panel mb-5 p-5" onSubmit={submit}>
+      <form id="admin-warehouse-form" className="panel mb-5 p-5" onSubmit={submit}>
         <h2 className="text-lg font-black text-ink">美国地址编辑格式</h2>
         <div className="mt-4 grid grid-cols-4 gap-4">
           <Input name="name" label="仓库名称" placeholder="洛杉矶一号仓" required />

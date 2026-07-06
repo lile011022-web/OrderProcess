@@ -70,13 +70,29 @@ export function WarehousePending() {
     }
   }
 
+  function searchPackage() {
+    const keyword = query.trim();
+    if (!keyword) {
+      setToast("请输入或扫描运单号后再搜索");
+    } else {
+      setToast(data.length ? `已匹配 ${data.length} 个待确认包裹` : `没有找到运单号包含 ${keyword} 的待确认包裹`);
+    }
+    setTimeout(() => setToast(""), 2200);
+  }
+
+  function openPhotoUpload(item: PackageItem) {
+    setSelected(item);
+    setToast("已打开包裹确认与照片上传窗口");
+    setTimeout(() => setToast(""), 2200);
+  }
+
   return (
     <div>
       <PageHeader title="待确认包裹" desc={error || (loading ? "正在从后端加载待确认包裹..." : "仓库扫描或输入运单号，确认包裹收到状态与实收数量。")} />
       <div className="panel mb-5 flex items-center gap-3 p-4">
         <ScanLine size={24} className="text-slate-500" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} className="h-14 flex-1 bg-transparent text-2xl font-black outline-none placeholder:text-slate-300" placeholder="扫描或输入运单号..." />
-        <button className="primary-btn">搜索包裹</button>
+        <button className="primary-btn" onClick={searchPackage}>搜索包裹</button>
       </div>
       <DataTable
         data={data}
@@ -90,7 +106,7 @@ export function WarehousePending() {
           { key: "buyer", title: "买手", render: (row) => row.buyer },
           { key: "warehouse", title: "仓库", render: (row) => row.warehouse },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="primary-btn py-2" onClick={() => setSelected(row)}>确认收到</button><button className="ghost-btn" onClick={() => markMissing(row)}>未收到</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button><button className="ghost-btn p-2" title="上传包裹照片"><Camera size={16} /></button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="primary-btn py-2" onClick={() => setSelected(row)}>确认收到</button><button className="ghost-btn" onClick={() => markMissing(row)}>未收到</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTracking(row.carrier, row.trackingNo)}><ExternalLink size={16} /></button><button className="ghost-btn p-2" title="上传包裹照片" onClick={() => openPhotoUpload(row)}><Camera size={16} /></button></div> },
         ]}
       />
       <Modal open={!!etaSelected} title="填写预计送达时间" onClose={() => setEtaSelected(null)}>

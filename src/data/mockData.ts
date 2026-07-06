@@ -1,4 +1,5 @@
 import type { BuyerFillRecord, PackageException, PackageItem, ProductProfile, PurchaseTask, ReconciliationRecord, WarehouseAddress } from "../types";
+import { latestWarehouseAddresses } from "./latestAddresses";
 
 export const buyers = ["Alex Chen", "Mia Wong", "Chris Lee", "Noah Smith"];
 export const warehouses = ["洛杉矶一号仓", "纽约中转仓", "俄勒冈免税仓"];
@@ -355,6 +356,7 @@ export const productProfiles: ProductProfile[] = [
 ];
 
 export const warehouseAddresses: WarehouseAddress[] = [
+  ...latestWarehouseAddresses,
   {
     id: "WH-LAX-01",
     name: "洛杉矶一号仓",

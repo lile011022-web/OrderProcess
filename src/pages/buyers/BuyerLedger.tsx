@@ -1,5 +1,7 @@
 import { WalletCards } from "lucide-react";
+import { useState } from "react";
 import { DataTable } from "../../components/DataTable";
+import { Modal } from "../../components/Modal";
 import { FilterBar, SelectFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { StatCard } from "../../components/StatCard";
@@ -13,6 +15,7 @@ const ledger = [
 ];
 
 export function BuyerLedger() {
+  const [selected, setSelected] = useState<(typeof ledger)[number] | null>(null);
   return (
     <div>
       <PageHeader title="买手往来账" desc="以买手维度追踪付款、退款、抵扣、异常生成与结清。" />
@@ -39,9 +42,18 @@ export function BuyerLedger() {
           { key: "change", title: "余额变化", render: (row) => currency(row.change) },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
           { key: "note", title: "备注", render: (row) => row.note },
-          { key: "actions", title: "操作", render: () => <button className="ghost-btn">查看</button> },
+          { key: "actions", title: "操作", render: (row) => <button className="ghost-btn" onClick={() => setSelected(row)}>查看</button> },
         ]}
       />
+      <Modal open={!!selected} title="往来账明细" onClose={() => setSelected(null)}>
+        {selected && <div className="space-y-3">
+          <p className="font-black text-ink">{selected.order} / {selected.product}</p>
+          <p>类型：{selected.type}</p>
+          <p>金额：{currency(selected.amount)}</p>
+          <p>余额变化：{currency(selected.change)}</p>
+          <p>备注：{selected.note}</p>
+        </div>}
+      </Modal>
     </div>
   );
 }

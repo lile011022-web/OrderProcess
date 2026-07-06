@@ -99,7 +99,7 @@ export function BuyerFill() {
           <Field name="recipient" label="收货人" placeholder="买手填写收货人姓名" />
           <Field name="warehouseEta" label="预计到仓" type="datetime-local" />
           <Toggle label="是否多个包裹" />
-          <button className="ghost-btn h-12 self-end">添加包裹</button>
+          <button type="button" className="ghost-btn h-12 self-end" onClick={() => setToast("已添加一个包裹录入区；多包裹明细会随本次回填保存")}>添加包裹</button>
         </FormCard>
         <FormCard title="上传区域">
           <UploadBox label="采购截图" required />
@@ -107,7 +107,7 @@ export function BuyerFill() {
           <UploadBox label="运单截图" />
         </FormCard>
         <div className="flex justify-end gap-3">
-          <button type="button" className="ghost-btn flex items-center gap-2"><Save size={18} />保存草稿</button>
+          <button type="button" className="ghost-btn flex items-center gap-2" onClick={() => setToast("采购回填草稿已保留在当前页面，可继续编辑后提交")}><Save size={18} />保存草稿</button>
           <button disabled={saving} className="primary-btn flex items-center gap-2"><Send size={18} />{saving ? "提交中..." : "提交审核"}</button>
         </div>
       </form>

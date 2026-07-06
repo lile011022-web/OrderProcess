@@ -61,6 +61,18 @@ CLEAR_AUDIT=true npm run backend:clear-business-data
 
 生产环境不要设置 `SEED_DEMO_DATA=true`，否则空库启动时会重新写入演示业务数据。
 
+## 导入最新地址
+
+v1.3.2 已把 `最新地址.docx` 中的 7 个最新美国仓库地址写入系统默认资料。新数据库会在初始化时自动带出；如果服务器已经存在旧数据库，需要登录服务器补导一次：
+
+```bash
+cd /opt/order-process
+SEED_DEMO_DATA=false npm run backend:import-latest-addresses
+systemctl restart order-process-backend
+```
+
+导入脚本会按固定地址 ID 覆盖/更新同名仓库地址，适合重复执行。导入完成后，管理员进入“仓库地址”页面可看到 DE Newark、DE Bear、DE Wilmington、PA Philadelphia 等最新地址。
+
 ## 核心接口
 
 | 方法 | 路径 | 说明 |

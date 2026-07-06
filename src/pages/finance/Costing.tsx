@@ -1,5 +1,7 @@
 import { Calculator } from "lucide-react";
+import { useState } from "react";
 import { DataTable } from "../../components/DataTable";
+import { Modal } from "../../components/Modal";
 import { PageHeader } from "../../components/PageHeader";
 import { StatusBadge } from "../../components/StatusBadge";
 import { reconciliationRecords } from "../../data/mockData";
@@ -14,10 +16,12 @@ const rows = [
 ];
 
 export function Costing() {
+  const [selected, setSelected] = useState<(typeof rows)[number] | null>(null);
+  const [message, setMessage] = useState("");
   const { data: records, loading, error } = useApiList<ReconciliationRecord>("/api/reconciliation", reconciliationRecords);
   return (
     <div>
-      <PageHeader title="成本核算" desc={error || (loading ? "正在从后端加载对账数据..." : "付款后不是最终成本，仓库确认收到后才转为实际入库采购成本。")} actions={<button className="primary-btn flex items-center gap-2"><Calculator size={18} />重新分摊</button>} />
+      <PageHeader title="成本核算" desc={message || error || (loading ? "正在从后端加载对账数据..." : "付款后不是最终成本，仓库确认收到后才转为实际入库采购成本。")} actions={<button className="primary-btn flex items-center gap-2" onClick={() => setMessage("成本已按当前入库数量、仓库操作费和运费重新分摊。")}><Calculator size={18} />重新分摊</button>} />
       <div className="panel mb-5 p-5">
         <h2 className="text-lg font-black text-ink">付款与入库成本确认</h2>
         <p className="mt-2 text-sm font-bold text-slate-500">买手或管理员付款后先进入已付待确认金额，只有仓库确认实际收到后才转为实际入库成本；异常金额单独列示，不混入正常成本。</p>
@@ -48,9 +52,18 @@ export function Costing() {
           { key: "total", title: "最终总成本", render: (row) => currency(row.inbound + row.warehouse + row.shipping) },
           { key: "unit", title: "单件最终成本", render: (row) => currency((row.inbound + row.warehouse + row.shipping) / row.qty) },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
-          { key: "actions", title: "操作", render: () => <div className="flex gap-2"><button className="ghost-btn">查看明细</button><button className="primary-btn py-2">重新分摊</button></div> },
+          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn" onClick={() => setSelected(row)}>查看明细</button><button className="primary-btn py-2" onClick={() => setMessage(`${row.product} 已重新分摊，单件最终成本 ${currency((row.inbound + row.warehouse + row.shipping) / row.qty)}`)}>重新分摊</button></div> },
         ]}
       />
+      <Modal open={!!selected} title="成本明细" onClose={() => setSelected(null)}>
+        {selected && <div className="space-y-3">
+          <p className="font-black text-ink">{selected.product}</p>
+          <p>实际入库采购成本：{currency(selected.inbound)}</p>
+          <p>仓库操作费：{currency(selected.warehouse)}</p>
+          <p>运费清关费：{currency(selected.shipping)}</p>
+          <p>单件最终成本：{currency((selected.inbound + selected.warehouse + selected.shipping) / selected.qty)}</p>
+        </div>}
+      </Modal>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { latestWarehouseAddresses } from "./latestAddresses.mjs";
+
 export const authUsers = {
   admin: { username: "admin", displayName: "管理员", role: "admin", password: "123456" },
   buyer: { username: "buyer", displayName: "Alex Chen", role: "buyer", password: "123456" },
@@ -287,6 +289,7 @@ export const productProfiles = [
 ];
 
 export const warehouseAddresses = [
+  ...latestWarehouseAddresses,
   {
     id: "WH-LAX-01",
     name: "洛杉矶一号仓",

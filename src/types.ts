@@ -74,6 +74,8 @@ export type PackageItem = {
 export type BuyerFillRecord = {
   id: string;
   orderId: string;
+  packageId?: string;
+  packageIds?: string[];
   buyer: string;
   productName: string;
   quantity: number;

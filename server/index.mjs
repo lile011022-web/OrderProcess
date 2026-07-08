@@ -25,7 +25,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
-const APP_VERSION = process.env.APP_VERSION || "1.3.4";
+const APP_VERSION = process.env.APP_VERSION || "1.3.5";
 const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_MAX_ATTEMPTS = Number(process.env.AUTH_RATE_LIMIT_MAX || 8);
 const authAttempts = new Map();
@@ -587,26 +587,36 @@ async function route(req, res) {
     if (!body || body.tooLarge) return error(res, body?.tooLarge ? 413 : 400, body?.tooLarge ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST", "请求体必须是合法 JSON");
     const record = normalizeRecord("buyerFillRecord", { ...body, buyer: user.role === "buyer" ? user.displayName : body.buyer }, user);
     let saved = saveRecord("buyerFillRecord", record, user, "buyerFillRecord.submit");
-    let packageItem = null;
-    if (record.trackingNo) {
-      packageItem = normalizeRecord("package", {
-        trackingNo: record.trackingNo,
-        carrier: inferCarrier(record.trackingNo) || undefined,
+    const packageInputs = Array.isArray(body.packages) && body.packages.length
+      ? body.packages
+      : record.trackingNo
+        ? [{ trackingNo: record.trackingNo, quantity: record.quantity, warehouse: record.warehouse, recipient: record.recipient, warehouseEta: record.warehouseEta }]
+        : [];
+    const packageItems = [];
+    for (const packageInput of packageInputs) {
+      const trackingNo = cleanText(packageInput.trackingNo, "");
+      if (!trackingNo) continue;
+      const packageItem = normalizeRecord("package", {
+        trackingNo,
+        carrier: inferCarrier(trackingNo) || undefined,
         buyer: record.buyer,
-        product: `${record.productName} x ${record.quantity}`,
-        expectedAt: record.warehouseEta || new Date().toISOString(),
-        warehouse: record.warehouse,
-        recipient: record.recipient,
-        productQty: record.quantity,
+        product: `${record.productName} x ${Math.max(1, cleanNumber(packageInput.quantity, record.quantity))}`,
+        expectedAt: packageInput.warehouseEta || record.warehouseEta || new Date().toISOString(),
+        warehouse: packageInput.warehouse || record.warehouse,
+        recipient: packageInput.recipient || record.recipient,
+        productQty: packageInput.quantity || record.quantity,
+        linkedPurchases: String(record.platformOrderNo || "").split(/[\s,，、\n]+/).filter(Boolean).length || 1,
         paidAmount: 0,
         paidPendingConfirmAmount: 0,
         inboundCost: 0,
         paymentStatus: "unpaid",
       }, user);
-      packageItem = saveRecord("package", packageItem, user, "package.createFromBuyerFill");
-      saved = saveRecord("buyerFillRecord", { ...saved, packageId: packageItem.id }, user, "buyerFillRecord.linkPackage");
+      packageItems.push(saveRecord("package", packageItem, user, "package.createFromBuyerFill"));
     }
-    return json(res, 201, { data: saved, package: packageItem, message: "采购回填已提交，已生成待处理包裹" });
+    if (packageItems.length) {
+      saved = saveRecord("buyerFillRecord", { ...saved, packageId: packageItems[0].id, packageIds: packageItems.map((item) => item.id) }, user, "buyerFillRecord.linkPackage");
+    }
+    return json(res, 201, { data: saved, packages: packageItems, package: packageItems[0] || null, message: packageItems.length > 1 ? `采购回填已提交，已生成 ${packageItems.length} 个待处理包裹` : "采购回填已提交，已生成待处理包裹" });
   }
 
   const reviewFillMatch = url.pathname.match(/^\/api\/buyer-fill-records\/([^/]+)\/review$/);

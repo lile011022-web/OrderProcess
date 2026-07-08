@@ -1,8 +1,6 @@
 import { latestWarehouseAddresses } from "./latestAddresses.mjs";
-import { saveRecord } from "./db.mjs";
+import { ensureLatestWarehouseAddresses } from "./db.mjs";
 
-for (const address of latestWarehouseAddresses) {
-  saveRecord("warehouse", address, { username: "system", role: "system" }, "warehouse.importLatestAddress");
-}
+const imported = ensureLatestWarehouseAddresses();
 
-console.log(JSON.stringify({ ok: true, imported: latestWarehouseAddresses.length }, null, 2));
+console.log(JSON.stringify({ ok: true, imported, addresses: latestWarehouseAddresses.map((address) => address.name) }, null, 2));

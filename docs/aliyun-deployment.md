@@ -171,11 +171,11 @@ systemctl restart order-process-backend
 curl http://127.0.0.1/health
 ```
 
-该命令不会删除四个登录账号，只会清除采购、包裹、异常、商品资料、仓库地址、对账和上传凭证等业务测试数据。
+该命令不会删除四个登录账号，只会清除采购、包裹、异常、商品资料、对账和上传凭证等业务测试数据；`最新地址.docx` 中的 7 个美国仓库地址会自动保留/恢复。
 
-## 8. 导入最新地址
+## 8. 最新地址基础资料
 
-部署 v1.3.2 后，如果服务器已有旧数据库，需要补导 `最新地址.docx` 中的 7 个美国仓库地址：
+部署 v1.3.3 后，`最新地址.docx` 中的 7 个美国仓库地址会作为系统基础资料自动存在，不依赖演示数据开关。如果服务器旧页面仍显示 0 条，可兜底执行：
 
 ```bash
 cd /opt/order-process
@@ -185,7 +185,7 @@ SEED_DEMO_DATA=false npm run backend:import-latest-addresses
 systemctl restart order-process-backend
 ```
 
-导入后用管理员登录，进入“仓库地址”，确认 DE Newark、DE Bear、DE Wilmington、PA Philadelphia 等最新地址都为“启用”。
+然后用管理员登录，进入“仓库地址”，确认 DE Newark、DE Bear、DE Wilmington、PA Philadelphia 等最新地址都为“启用”。
 
 ## 9. 防破解与安全组
 

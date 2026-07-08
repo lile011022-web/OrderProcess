@@ -11,13 +11,15 @@ import { UploadBox } from "../../components/UploadBox";
 import { fillRecords } from "../../data/mockData";
 import type { BuyerFillRecord } from "../../types";
 import { inferCarrier, openTrackingByNumber } from "../../data/carrierConfig";
-import { apiRequest } from "../../utils/api";
+import { apiRequest, listUploadsApi, type UploadRecord, uploadFileApi } from "../../utils/api";
 import { getCurrentUser } from "../../utils/auth";
 import { currency, dateText } from "../../utils/format";
 import { useApiList } from "../../utils/useApiList";
 
 export function BuyerPayments() {
   const [selected, setSelected] = useState<BuyerFillRecord | null>(null);
+  const [viewing, setViewing] = useState<BuyerFillRecord | null>(null);
+  const [proofTarget, setProofTarget] = useState<BuyerFillRecord | null>(null);
   const [toast, setToast] = useState("");
   const user = getCurrentUser();
   const endpoint = user?.role === "buyer" ? `/api/buyer-fill-records?buyer=${encodeURIComponent(user.displayName)}` : "/api/buyer-fill-records";
@@ -77,15 +79,71 @@ export function BuyerPayments() {
           { key: "eta", title: "仓库预计到达", render: (row) => row.warehouseEta ? dateText(row.warehouseEta) : "待仓库填写" },
           { key: "audit", title: "审核状态", render: (row) => <StatusBadge>{row.auditStatus}</StatusBadge> },
           { key: "pay", title: `${paymentWord}状态`, render: (row) => <StatusBadge>{statusText(row.payStatus)}</StatusBadge> },
-          { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button className="ghost-btn" onClick={() => review(row, true)}>审核</button><button className="primary-btn py-2" onClick={() => setSelected(row)}>{paymentWord}</button><button className="ghost-btn" onClick={() => review(row, false)}>驳回</button><button className="ghost-btn p-2" title="打开快递官网查询" onClick={() => openTrackingByNumber(row.trackingNo)}><ExternalLink size={16} /></button></div> },
+          {
+            key: "actions",
+            title: "操作",
+            render: (row) => isBuyer
+              ? <div className="flex gap-2"><button className="ghost-btn" onClick={() => setViewing(row)}>查看</button><button className="primary-btn py-2" onClick={() => setProofTarget(row)}>上传凭证</button><button className="ghost-btn p-2" title="打开快递官网查询" disabled={!row.trackingNo} onClick={() => openTrackingByNumber(row.trackingNo)}><ExternalLink size={16} /></button></div>
+              : <div className="flex gap-2"><button className="ghost-btn" onClick={() => review(row, true)}>审核</button><button className="primary-btn py-2" onClick={() => setSelected(row)}>{paymentWord}</button><button className="ghost-btn" onClick={() => review(row, false)}>驳回</button><button className="ghost-btn p-2" title="打开快递官网查询" disabled={!row.trackingNo} onClick={() => openTrackingByNumber(row.trackingNo)}><ExternalLink size={16} /></button></div>,
+          },
         ]}
       />
       <Modal open={!!selected} title={`${paymentWord}处理`} onClose={() => setSelected(null)}>
         {selected && <PaymentForm record={selected} paymentWord={paymentWord} onDone={(payload) => pay(selected, payload)} />}
       </Modal>
+      <Modal open={!!viewing} title="收款详情" onClose={() => setViewing(null)}>
+        {viewing && <RecordDetail record={viewing} paymentWord={paymentWord} />}
+      </Modal>
+      <Modal open={!!proofTarget} title="上传凭证" onClose={() => setProofTarget(null)}>
+        {proofTarget && <ProofUpload record={proofTarget} onDone={(message) => { setProofTarget(null); setToast(message); setTimeout(() => setToast(""), 2200); }} />}
+      </Modal>
       <Toast message={toast} />
     </div>
   );
+}
+
+function RecordDetail({ record, paymentWord }: { record: BuyerFillRecord; paymentWord: string }) {
+  return <div className="space-y-4">
+    <PayMetric label="回填编号" value={record.id} />
+    <PayMetric label="商品" value={record.productName} />
+    <PayMetric label="数量 / 单价" value={`${record.quantity} / ${currency(record.unitPrice)}`} />
+    <PayMetric label="结算金额" value={currency(record.settlement)} highlight />
+    <PayMetric label="审核状态" value={record.auditStatus} />
+    <PayMetric label={`${paymentWord}状态`} value={record.payStatus.replace(/付款/g, "收款").replace(/已付/g, "已收")} />
+    <PayMetric label="运单号" value={record.trackingNo || "待回填"} />
+  </div>;
+}
+
+function ProofUpload({ record, onDone }: { record: BuyerFillRecord; onDone: (message: string) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [uploads, setUploads] = useState<UploadRecord[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  async function refreshUploads() {
+    const result = await listUploadsApi("buyerFillRecord", record.id);
+    setUploads(result.data);
+  }
+
+  async function upload() {
+    if (!file) return onDone("请先选择要上传的凭证");
+    setSaving(true);
+    try {
+      await uploadFileApi("buyerFillRecord", record.id, file);
+      await refreshUploads();
+      onDone("凭证已上传");
+    } catch (error) {
+      onDone(error instanceof Error ? error.message : "上传凭证失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <div className="space-y-4">
+    <PayMetric label="回填编号" value={record.id} />
+    <UploadBox label="收款/采购补充凭证" accept="image/*,application/pdf" onFileChange={setFile} />
+    {uploads.length > 0 && <div className="rounded-3xl bg-slate-50 p-4 text-sm font-bold text-slate-600">已上传 {uploads.length} 个凭证</div>}
+    <button className="primary-btn w-full" disabled={saving} onClick={upload}>{saving ? "上传中..." : "确认上传凭证"}</button>
+  </div>;
 }
 
 function PaymentForm({ record, paymentWord, onDone }: { record: BuyerFillRecord; paymentWord: string; onDone: (payload: Record<string, unknown>) => void }) {

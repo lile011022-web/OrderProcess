@@ -11,6 +11,8 @@ import {
   tasks,
   warehouseAddresses,
 } from "./mockData.mjs";
+import { latestWarehouseAddresses } from "./latestAddresses.mjs";
+import { latestProducts } from "./latestProducts.mjs";
 import { hashPassword, publicUser } from "./auth.mjs";
 
 const DATA_DIR = process.env.DATA_DIR || path.resolve("data");
@@ -86,21 +88,47 @@ function insertRecord(kind, item) {
   `).run(kind, item.id, JSON.stringify(item));
 }
 
+function upsertSystemRecord(kind, item) {
+  db.prepare(`
+    INSERT INTO records (kind, id, payload, updated_at)
+    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(kind, id) DO UPDATE SET payload = excluded.payload, updated_at = CURRENT_TIMESTAMP
+  `).run(kind, item.id, JSON.stringify(item));
+}
+
+export function ensureLatestWarehouseAddresses() {
+  latestWarehouseAddresses.forEach((item) => upsertSystemRecord("warehouse", item));
+  return latestWarehouseAddresses.length;
+}
+
+export function ensureLatestProducts() {
+  latestProducts.forEach((item) => upsertSystemRecord("product", item));
+  return latestProducts.length;
+}
+
 export function seedIfEmpty() {
   const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
   if (userCount === 0) Object.values(authUsers).forEach(insertUser);
 
+  ensureLatestWarehouseAddresses();
+  const productCount = db.prepare("SELECT COUNT(*) AS count FROM records WHERE kind = 'product'").get().count;
+  if (productCount === 0) ensureLatestProducts();
+
   if (process.env.SEED_DEMO_DATA !== "true") return;
 
-  const recordCount = db.prepare("SELECT COUNT(*) AS count FROM records").get().count;
-  if (recordCount > 0) return;
-  tasks.forEach((item) => insertRecord("task", item));
-  fillRecords.forEach((item) => insertRecord("buyerFillRecord", item));
-  packages.forEach((item) => insertRecord("package", item));
-  packageExceptions.forEach((item) => insertRecord("packageException", item));
+  seedDemoKindIfEmpty("task", tasks);
+  seedDemoKindIfEmpty("buyerFillRecord", fillRecords);
+  seedDemoKindIfEmpty("package", packages);
+  seedDemoKindIfEmpty("packageException", packageExceptions);
+  seedDemoKindIfEmpty("reconciliation", reconciliationRecords);
   productProfiles.forEach((item) => insertRecord("product", item));
   warehouseAddresses.forEach((item) => insertRecord("warehouse", item));
-  reconciliationRecords.forEach((item) => insertRecord("reconciliation", item));
+}
+
+function seedDemoKindIfEmpty(kind, items) {
+  const count = db.prepare("SELECT COUNT(*) AS count FROM records WHERE kind = ?").get(kind).count;
+  if (count > 0) return;
+  items.forEach((item) => insertRecord(kind, item));
 }
 
 export function getUser(username) {
@@ -137,6 +165,8 @@ export function clearBusinessData({ clearAudit = false } = {}) {
     const records = db.prepare("DELETE FROM records").run();
     const uploads = db.prepare("DELETE FROM uploads").run();
     const audit = clearAudit ? db.prepare("DELETE FROM audit_logs").run() : { changes: 0 };
+    const restoredWarehouseAddresses = ensureLatestWarehouseAddresses();
+    const restoredProducts = ensureLatestProducts();
     writeAudit({
       actor: "system",
       role: "system",
@@ -144,10 +174,10 @@ export function clearBusinessData({ clearAudit = false } = {}) {
       targetKind: "database",
       targetId: "records",
       before: null,
-      after: { records: records.changes, uploads: uploads.changes, audit: audit.changes },
+      after: { records: records.changes, uploads: uploads.changes, audit: audit.changes, restoredWarehouseAddresses, restoredProducts },
     });
     db.exec("COMMIT");
-    return { records: records.changes, uploads: uploads.changes, audit: audit.changes };
+    return { records: records.changes, uploads: uploads.changes, audit: audit.changes, restoredWarehouseAddresses, restoredProducts };
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;

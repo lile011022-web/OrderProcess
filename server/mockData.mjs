@@ -1,4 +1,5 @@
 import { latestWarehouseAddresses } from "./latestAddresses.mjs";
+import { latestProducts } from "./latestProducts.mjs";
 
 export const authUsers = {
   admin: { username: "admin", displayName: "管理员", role: "admin", password: "123456" },
@@ -264,6 +265,7 @@ export const packageExceptions = [
 ];
 
 export const productProfiles = [
+  ...latestProducts,
   {
     id: "SKU-BC-2024-HOBBY",
     name: "2024 Bowman Chrome Hobby Box",

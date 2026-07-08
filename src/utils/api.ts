@@ -81,6 +81,45 @@ export function deleteRecordApi<T>(kind: string, id: string) {
   });
 }
 
+export type UploadRecord = {
+  id: string;
+  owner: string;
+  targetKind: string;
+  targetId: string;
+  filename: string;
+  mimeType: string;
+  path: string;
+  size: number;
+  createdAt?: string;
+};
+
+function fileToBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || "").split(",")[1] || "");
+    reader.onerror = () => reject(reader.error || new Error("读取文件失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function uploadFileApi(targetKind: string, targetId: string, file: File) {
+  const contentBase64 = await fileToBase64(file);
+  return apiRequest<{ data: UploadRecord }>("/api/uploads", {
+    method: "POST",
+    body: JSON.stringify({
+      targetKind,
+      targetId,
+      filename: file.name,
+      mimeType: file.type || "application/octet-stream",
+      contentBase64,
+    }),
+  });
+}
+
+export function listUploadsApi(targetKind: string, targetId: string) {
+  return apiRequest<{ data: UploadRecord[] }>(`/api/uploads?targetKind=${encodeURIComponent(targetKind)}&targetId=${encodeURIComponent(targetId)}`);
+}
+
 export async function downloadReportCsv(reportType: string) {
   const headers = new Headers();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);

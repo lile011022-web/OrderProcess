@@ -1,8 +1,8 @@
 # 球星卡采购接单对账系统
 
-版本：v1.3.2
+版本：v1.3.3
 
-这是面向球星卡采购、接单、包裹入库、费用核算、付款确认、异常处理和对账管理的业务系统。v1.3.2 已加入 SQLite 持久化后端、token 登录、角色校验、审计日志、凭证上传、登录页改密、生产清除测试数据、基础安全加固、最新地址导入，以及采购任务、接单、买手回填、付款、仓库确认、异常处理、客户资料和报表导出的真实写入闭环。
+这是面向球星卡采购、接单、包裹入库、费用核算、付款确认、异常处理和对账管理的业务系统。v1.3.3 已加入 SQLite 持久化后端、token 登录、角色校验、审计日志、凭证上传、登录页改密、生产清除测试数据、基础安全加固、最新地址自动保留，以及采购任务、接单、买手回填、付款、仓库确认、异常处理、客户资料和报表导出的真实写入闭环。
 
 仓库名称：OrderProcess。用途：个人记账、采购流程管理和球星卡供销对账。
 
@@ -33,6 +33,7 @@ npm run backend:dev
 npm run backend:check
 npm run backend:clear-business-data
 npm run backend:import-latest-addresses
+npm run backend:import-latest-products
 ```
 
 后端默认监听 `http://127.0.0.1:7301`，默认 SQLite 数据文件在 `data/order-process.sqlite`，部署说明见 [docs/backend-deployment.md](docs/backend-deployment.md)。
@@ -65,7 +66,8 @@ npm run backend:import-latest-addresses
 - 登录和改密接口增加限流，后端与 Nginx 增加基础安全响应头。
 - 登录首页提供修改密码入口，不再在页面展示默认测试密码。
 - v1.3 起，发布采购任务、接单、买手回填、管理员付款、仓库确认、异常处理、商品/仓库资料提交和审核、CSV 报表导出均会真实调用后端并写入 SQLite。
-- v1.3.2 起，`最新地址.docx` 中的 7 个最新美国仓库地址已进入前端默认资料和后端初始化数据；已有服务器数据库可执行 `npm run backend:import-latest-addresses` 补导。
+- v1.3.3 起，`最新地址.docx` 中的 7 个最新美国仓库地址是系统基础资料，不依赖演示数据；后端启动和清除测试数据后都会自动保留/恢复。
+- v1.3.3 起，常用 2025/26 篮球卡盒商品会作为系统基础商品资料保留；可通过 `npm run backend:import-latest-products` 对已有数据库补导。
 
 ## 验收建议
 
@@ -77,7 +79,7 @@ npm run backend:import-latest-addresses
 - 使用客户查看我的商品资料和我的仓库地址，确认只显示客户自己的数据。
 - 点击 UPS / FedEx / USPS 运单号，确认使用集中规则打开官网查询。
 - 在登录页点击“修改密码”，确认弱密码被拒绝，强密码可修改，旧密码失效。
-- 生产部署后执行 `npm run backend:clear-business-data` 清除业务测试数据，再确认各业务列表为空。
+- 生产部署后执行 `npm run backend:clear-business-data` 清除业务测试数据，再确认采购、包裹、异常等业务列表为空；仓库地址应保留 7 条最新地址。
 - 使用管理员发布采购任务，再使用买手接单和回填，确认包裹列表出现对应包裹。
 - 使用管理员付款后，确认包裹金额进入“已付待确认”；使用仓库确认收到后，确认金额转为“实际入库成本”。
 - 使用客户提交商品/仓库地址，再用管理员在基础资料中审核启用。

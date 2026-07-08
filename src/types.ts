@@ -23,10 +23,12 @@ export type NavItem = {
 
 export type PurchaseTask = {
   id: string;
+  productId?: string;
   requester: string;
   source: "管理员发布" | "客户发布";
   productName: string;
   image: string;
+  spec?: string;
   targetPrice: number;
   quantity: number;
   accepted: number;
@@ -34,6 +36,9 @@ export type PurchaseTask = {
   arrived: number;
   deadline: string;
   status: string;
+  customerPayStatus?: string;
+  customerPaidAmount?: number;
+  customerPaidAt?: string;
   overdue: boolean;
   buyer: string;
   requirement: string;
@@ -82,6 +87,8 @@ export type BuyerFillRecord = {
 export type ProductProfile = {
   id: string;
   name: string;
+  image?: string;
+  sourceUrl?: string;
   category: string;
   brand: string;
   spec: string;

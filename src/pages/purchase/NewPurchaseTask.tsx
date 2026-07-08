@@ -1,20 +1,28 @@
-import { Save, Send, X } from "lucide-react";
+import { ImagePlus, Save, Send, X } from "lucide-react";
 import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import { useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { PageHeader } from "../../components/PageHeader";
 import { Toast } from "../../components/Toast";
-import { UploadBox } from "../../components/UploadBox";
 import { apiRequest } from "../../utils/api";
 import { currency } from "../../utils/format";
 import { requireCurrentUser } from "../../utils/auth";
+import { useApiList } from "../../utils/useApiList";
+import { productProfiles } from "../../data/mockData";
+import type { ProductProfile } from "../../types";
 
 export function NewPurchaseTask() {
   const location = useLocation();
   const navigate = useNavigate();
   const user = requireCurrentUser();
   const isCustomerTask = location.pathname.startsWith("/customer/");
+  const { data: products } = useApiList<ProductProfile>("/api/products", productProfiles);
+  const enabledProducts = products.filter((product) => product.status === "启用");
+  const [selectedProductId, setSelectedProductId] = useState("");
+  const [productName, setProductName] = useState("");
+  const [productSpec, setProductSpec] = useState("");
+  const [productImage, setProductImage] = useState("");
   const [quantity, setQuantity] = useState(80);
   const [price, setPrice] = useState(1680);
   const [toast, setToast] = useState("");
@@ -30,12 +38,16 @@ export function NewPurchaseTask() {
         method: "POST",
         body: JSON.stringify({
           requester: user.displayName,
-          productName: form.get("productName"),
-          image: String(form.get("image") || "https://images.unsplash.com/photo-1607242792481-37f27e1d74e1?auto=format&fit=crop&w=420&q=80"),
+          productId: selectedProductId,
+          productName: productName || form.get("productName"),
+          image: productImage || "https://images.unsplash.com/photo-1607242792481-37f27e1d74e1?auto=format&fit=crop&w=420&q=80",
+          spec: productSpec || form.get("spec"),
           targetPrice: price,
           quantity,
           deadline: deadline || new Date(Date.now() + 7 * 86400000).toISOString(),
           status,
+          customerPayStatus: "待结款",
+          customerPaidAmount: 0,
           requirement: [form.get("condition"), form.get("platform"), form.get("note")].filter(Boolean).join("；"),
           warehouse: form.get("warehouse"),
           recipient: form.get("recipient"),
@@ -51,6 +63,16 @@ export function NewPurchaseTask() {
     }
   }
 
+  function selectProduct(productId: string) {
+    setSelectedProductId(productId);
+    const product = enabledProducts.find((item) => item.id === productId);
+    if (!product) return;
+    setProductName(product.name);
+    setProductSpec(product.spec);
+    setPrice(product.referencePrice || price);
+    setProductImage(product.image || "");
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await saveTask(event.currentTarget, "已发布");
@@ -64,9 +86,16 @@ export function NewPurchaseTask() {
       />
       <form className="space-y-5" onSubmit={submit}>
         <FormCard title="基础信息">
-          <Field name="productName" label="商品名称" placeholder="2024 Bowman Chrome Hobby Box" required />
-          <UploadBox label="商品图片上传" />
-          <Field name="spec" label="商品规格" placeholder="盒 / 箱 / 张 / case / lot" />
+          <label className="col-span-2">
+            <span className="mb-2 block text-sm font-bold text-slate-600">从商品库选择</span>
+            <select value={selectedProductId} onChange={(event) => selectProduct(event.target.value)} className="soft-input h-12 w-full px-4 font-bold">
+              <option value="">手动填写商品</option>
+              {enabledProducts.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+            </select>
+          </label>
+          <Field name="productName" label="商品名称" placeholder="2024 Bowman Chrome Hobby Box" value={productName} onChange={(event) => setProductName(event.currentTarget.value)} required />
+          <TaskImageInput image={productImage} onChange={setProductImage} />
+          <Field name="spec" label="商品规格" placeholder="盒 / 箱 / 张 / case / lot" value={productSpec} onChange={(event) => setProductSpec(event.currentTarget.value)} />
           <Field name="year" label="年份" placeholder="2024" />
           <Field name="series" label="系列" placeholder="Bowman / Prizm / Topps" />
           <NumberField label="采购数量" value={quantity} onChange={setQuantity} />
@@ -81,8 +110,8 @@ export function NewPurchaseTask() {
           <Toggle label="超价是否需要审核" defaultChecked />
         </FormCard>
         <FormCard title="收货信息">
-          <Field name="warehouse" label="收货仓库" placeholder={isCustomerTask ? "纽约中转仓" : "洛杉矶一号仓"} required />
-          <Field name="recipient" label="收货人" placeholder={isCustomerTask ? "Ben Miller" : "Warehouse Amy"} required />
+          <Field name="warehouse" label="收货仓库" placeholder={isCustomerTask ? "纽约中转仓" : "洛杉矶一号仓"} />
+          <Field name="recipient" label="收货人" placeholder={isCustomerTask ? "Ben Miller" : "Warehouse Amy"} />
           <Field name="address" label="收货地址" placeholder={isCustomerTask ? "41-20 39th St, Long Island City, NY 11104" : "1180 S Los Angeles St, Los Angeles, CA"} />
         </FormCard>
         <FormCard title="任务设置">
@@ -99,6 +128,29 @@ export function NewPurchaseTask() {
         </div>
       </form>
       <Toast message={toast} />
+    </div>
+  );
+}
+
+function TaskImageInput({ image, onChange }: { image: string; onChange: (image: string) => void }) {
+  return (
+    <div>
+      <p className="mb-2 text-sm font-bold text-slate-600">商品图片</p>
+      <label className="flex h-32 cursor-pointer items-center justify-center overflow-hidden rounded-3xl border border-dashed border-slate-300 bg-white/70 text-slate-500">
+        {image ? <img src={image} className="h-full w-full object-cover" alt="商品图片" /> : <span className="flex flex-col items-center gap-2 text-sm font-bold"><ImagePlus size={24} />上传图片</span>}
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => onChange(String(reader.result || ""));
+            reader.readAsDataURL(file);
+          }}
+        />
+      </label>
     </div>
   );
 }

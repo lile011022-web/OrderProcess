@@ -53,7 +53,7 @@ SEED_DEMO_DATA=false npm run backend:clear-business-data
 systemctl restart order-process-backend
 ```
 
-该命令会清除采购任务、买手回填、包裹、异常、商品资料、仓库地址、对账记录和上传凭证记录，默认也会删除 `UPLOAD_DIR` 内的上传文件。它不会删除用户账号。需要连审计日志一起清除时：
+该命令会清除采购任务、买手回填、包裹、异常、商品资料、对账记录和上传凭证记录，默认也会删除 `UPLOAD_DIR` 内的上传文件。它不会删除用户账号，也不会删除系统基础仓库地址；`最新地址.docx` 中的 7 个美国仓库地址会自动恢复。需要连审计日志一起清除时：
 
 ```bash
 CLEAR_AUDIT=true npm run backend:clear-business-data
@@ -61,9 +61,11 @@ CLEAR_AUDIT=true npm run backend:clear-business-data
 
 生产环境不要设置 `SEED_DEMO_DATA=true`，否则空库启动时会重新写入演示业务数据。
 
-## 导入最新地址
+## 最新地址基础资料
 
-v1.3.2 已把 `最新地址.docx` 中的 7 个最新美国仓库地址写入系统默认资料。新数据库会在初始化时自动带出；如果服务器已经存在旧数据库，需要登录服务器补导一次：
+v1.3.3 已把 `最新地址.docx` 中的 7 个最新美国仓库地址作为系统基础资料。后端每次启动都会自动 upsert，生产环境 `SEED_DEMO_DATA=false` 也会显示这些地址；清除测试数据后也会自动恢复。
+
+如果服务器旧数据库页面仍显示 0 条，可登录服务器手动兜底执行一次：
 
 ```bash
 cd /opt/order-process
@@ -71,7 +73,7 @@ SEED_DEMO_DATA=false npm run backend:import-latest-addresses
 systemctl restart order-process-backend
 ```
 
-导入脚本会按固定地址 ID 覆盖/更新同名仓库地址，适合重复执行。导入完成后，管理员进入“仓库地址”页面可看到 DE Newark、DE Bear、DE Wilmington、PA Philadelphia 等最新地址。
+导入脚本会按固定地址 ID 覆盖/更新同名仓库地址，适合重复执行。完成后，管理员进入“仓库地址”页面可看到 DE Newark、DE Bear、DE Wilmington、PA Philadelphia 等最新地址。
 
 ## 核心接口
 

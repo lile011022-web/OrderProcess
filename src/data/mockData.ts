@@ -1,5 +1,6 @@
 import type { BuyerFillRecord, PackageException, PackageItem, ProductProfile, PurchaseTask, ReconciliationRecord, WarehouseAddress } from "../types";
 import { latestWarehouseAddresses } from "./latestAddresses";
+import { latestProducts } from "./latestProducts";
 
 export const buyers = ["Alex Chen", "Mia Wong", "Chris Lee", "Noah Smith"];
 export const warehouses = ["洛杉矶一号仓", "纽约中转仓", "俄勒冈免税仓"];
@@ -320,6 +321,7 @@ export const photos = [
 ];
 
 export const productProfiles: ProductProfile[] = [
+  ...latestProducts,
   {
     id: "SKU-BC-2024-HOBBY",
     name: "2024 Bowman Chrome Hobby Box",

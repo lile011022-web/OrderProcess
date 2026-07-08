@@ -61,6 +61,7 @@ export function PurchaseTasks() {
           { key: "left", title: "剩余", render: (row) => row.quantity - row.purchased },
           { key: "deadline", title: "截止时间", render: (row) => dateText(row.deadline) },
           { key: "status", title: "状态", render: (row) => <StatusBadge>{row.status}</StatusBadge> },
+          { key: "customerPay", title: "客户结款", render: (row) => <StatusBadge>{row.customerPayStatus || "待结款"}</StatusBadge> },
           { key: "overdue", title: "是否超时", render: (row) => <StatusBadge>{row.overdue ? "超时" : "正常"}</StatusBadge> },
           { key: "actions", title: "操作", render: (row) => <div className="flex gap-2"><button onClick={() => setSelected(row)} className="ghost-btn p-2"><Eye size={16} /></button><button className="ghost-btn p-2" onClick={() => updateTask(row, { status: "接单中" })}><Pencil size={16} /></button><button className="ghost-btn p-2" onClick={() => updateTask(row, { status: "已暂停" })}><Pause size={16} /></button><button className="ghost-btn p-2" onClick={() => updateTask(row, { status: "已完成", purchased: row.quantity, arrived: row.quantity })}><Square size={16} /></button><button className="ghost-btn p-2" onClick={() => copyTask(row)}><Copy size={16} /></button><button className="ghost-btn p-2" onClick={() => removeTask(row)}>删</button></div> },
         ]}
@@ -77,6 +78,8 @@ export function PurchaseTasks() {
             <Info label="预计预算" value={currency(selected.targetPrice * selected.quantity)} />
             <Info label="采购数量" value={String(selected.quantity)} />
             <Info label="已到仓数量" value={String(selected.arrived)} />
+            <Info label="客户结款" value={selected.customerPayStatus || "待结款"} />
+            <Info label="结款金额" value={currency(selected.customerPaidAmount || 0)} />
             <Info label="收货仓库" value={selected.warehouse} />
             <Info label="收货人" value={selected.recipient} />
           </div>

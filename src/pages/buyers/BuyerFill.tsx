@@ -6,7 +6,7 @@ import { UploadBox } from "../../components/UploadBox";
 import { Field, FormCard, NumberField, Toggle } from "../purchase/NewPurchaseTask";
 import { inferCarrier } from "../../data/carrierConfig";
 import { warehouseAddresses } from "../../data/mockData";
-import { apiRequest } from "../../utils/api";
+import { apiRequest, uploadFileApi } from "../../utils/api";
 import { requireCurrentUser } from "../../utils/auth";
 import { currency } from "../../utils/format";
 
@@ -18,6 +18,7 @@ export function BuyerFill() {
   const [shipping, setShipping] = useState(0);
   const [service, setService] = useState(0);
   const [trackingNo, setTrackingNo] = useState("1Z999AA10123456784");
+  const [proofFiles, setProofFiles] = useState<Record<string, File | null>>({});
   const [toast, setToast] = useState("");
   const [saving, setSaving] = useState(false);
   const productAmount = useMemo(() => qty * price, [qty, price]);
@@ -29,7 +30,7 @@ export function BuyerFill() {
     setSaving(true);
     const form = new FormData(event.currentTarget);
     try {
-      await apiRequest("/api/buyer-fill-records", {
+      const result = await apiRequest<{ data: { id: string }; message: string }>("/api/buyer-fill-records", {
         method: "POST",
         body: JSON.stringify({
           orderId: form.get("orderId"),
@@ -53,7 +54,9 @@ export function BuyerFill() {
           payStatus: "待付款",
         }),
       });
-      setToast("采购回填已提交，包裹已生成");
+      const files = Object.values(proofFiles).filter((file): file is File => Boolean(file));
+      await Promise.all(files.map((file) => uploadFileApi("buyerFillRecord", result.data.id, file)));
+      setToast(files.length ? `采购回填已提交，已上传 ${files.length} 个凭证并生成包裹` : "采购回填已提交，包裹已生成");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "提交回填失败");
     } finally {
@@ -102,9 +105,9 @@ export function BuyerFill() {
           <button type="button" className="ghost-btn h-12 self-end" onClick={() => setToast("已添加一个包裹录入区；多包裹明细会随本次回填保存")}>添加包裹</button>
         </FormCard>
         <FormCard title="上传区域">
-          <UploadBox label="采购截图" required />
-          <UploadBox label="订单截图" />
-          <UploadBox label="运单截图" />
+          <UploadBox label="采购截图" required accept="image/*,application/pdf" onFileChange={(file) => setProofFiles((current) => ({ ...current, purchase: file }))} />
+          <UploadBox label="订单截图" accept="image/*,application/pdf" onFileChange={(file) => setProofFiles((current) => ({ ...current, order: file }))} />
+          <UploadBox label="运单截图" accept="image/*,application/pdf" onFileChange={(file) => setProofFiles((current) => ({ ...current, tracking: file }))} />
         </FormCard>
         <div className="flex justify-end gap-3">
           <button type="button" className="ghost-btn flex items-center gap-2" onClick={() => setToast("采购回填草稿已保留在当前页面，可继续编辑后提交")}><Save size={18} />保存草稿</button>

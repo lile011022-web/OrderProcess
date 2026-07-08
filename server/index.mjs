@@ -24,7 +24,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
-const APP_VERSION = process.env.APP_VERSION || "1.3.2";
+const APP_VERSION = process.env.APP_VERSION || "1.3.3";
 const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_MAX_ATTEMPTS = Number(process.env.AUTH_RATE_LIMIT_MAX || 8);
 const authAttempts = new Map();
@@ -47,7 +47,7 @@ function json(res, status, payload) {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(body),
     "access-control-allow-origin": CORS_ORIGIN,
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers": "content-type,authorization",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
@@ -67,7 +67,7 @@ function text(res, status, content, contentType = "text/plain; charset=utf-8") {
     "content-type": contentType,
     "content-length": Buffer.byteLength(content),
     "access-control-allow-origin": CORS_ORIGIN,
-    "access-control-allow-methods": "GET,POST,OPTIONS",
+    "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers": "content-type,authorization",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
@@ -175,6 +175,8 @@ function requireRole(user, res, roles) {
 
 function canReadKind(user, kind, item) {
   if (user.role === "admin") return true;
+  if (kind === "product") return item.status === "启用" || item.owner === user.displayName;
+  if (kind === "warehouse") return item.status === "启用" || item.owner === user.displayName;
   if (user.role === "warehouse") return ["package", "packageException", "warehouse", "reconciliation"].includes(kind);
   if (user.role === "buyer") return item.buyer === user.displayName || kind === "task";
   if (user.role === "customer") return item.requester === user.displayName || item.owner === user.displayName;
@@ -208,6 +210,13 @@ function cleanNumber(value, fallback = 0) {
   return Number.isFinite(number) ? Math.max(0, number) : fallback;
 }
 
+function cleanImage(value, fallback = "") {
+  const image = String(value ?? fallback).trim();
+  if (!image) return "";
+  if (!image.startsWith("data:image/") && !image.startsWith("http://") && !image.startsWith("https://")) return "";
+  return image.slice(0, 1024 * 1024 * 4);
+}
+
 function warehouseContactName(warehouseName) {
   const name = cleanText(warehouseName);
   if (!name) return "";
@@ -224,10 +233,12 @@ function normalizeRecord(kind, body, user, existing = null) {
     return {
       ...existing,
       id: existing?.id || body.id || makeId("task"),
+      productId: cleanText(body.productId, existing?.productId || ""),
       requester: existing?.requester || cleanText(body.requester, user.displayName),
       source: existing?.source || (user.role === "customer" ? "客户发布" : "管理员发布"),
       productName: cleanText(body.productName, existing?.productName || "未命名采购任务"),
-      image: cleanText(body.image, existing?.image || "https://images.unsplash.com/photo-1607242792481-37f27e1d74e1?auto=format&fit=crop&w=420&q=80"),
+      image: cleanImage(body.image, existing?.image || "https://images.unsplash.com/photo-1607242792481-37f27e1d74e1?auto=format&fit=crop&w=420&q=80"),
+      spec: cleanText(body.spec, existing?.spec || ""),
       targetPrice: cleanNumber(body.targetPrice, existing?.targetPrice || 0),
       quantity,
       accepted,
@@ -235,6 +246,9 @@ function normalizeRecord(kind, body, user, existing = null) {
       arrived: Math.min(quantity, cleanNumber(body.arrived, existing?.arrived || 0)),
       deadline,
       status: cleanText(body.status, existing?.status || "已发布"),
+      customerPayStatus: cleanText(body.customerPayStatus, existing?.customerPayStatus || "待结款"),
+      customerPaidAmount: cleanNumber(body.customerPaidAmount, existing?.customerPaidAmount || 0),
+      customerPaidAt: body.customerPaidAt || existing?.customerPaidAt || "",
       overdue: Boolean(body.overdue ?? existing?.overdue ?? (new Date(deadline).getTime() < Date.now())),
       buyer: cleanText(body.buyer, existing?.buyer || "未分配"),
       requirement: cleanText(body.requirement, existing?.requirement || ""),
@@ -319,6 +333,8 @@ function normalizeRecord(kind, body, user, existing = null) {
       ...existing,
       id: existing?.id || body.id || makeId("product"),
       name: cleanText(body.name, existing?.name || "未命名商品"),
+      image: cleanImage(body.image, existing?.image || ""),
+      sourceUrl: cleanImage(body.sourceUrl, existing?.sourceUrl || ""),
       category: cleanText(body.category, existing?.category || ""),
       brand: cleanText(body.brand, existing?.brand || ""),
       spec: cleanText(body.spec, existing?.spec || ""),

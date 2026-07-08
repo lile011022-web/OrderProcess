@@ -81,7 +81,7 @@ export function Login() {
             <span className="mb-2 block text-sm font-bold text-slate-200">用户名</span>
             <div className="flex h-14 items-center gap-3 rounded-2xl border border-white/15 bg-white/10 px-4">
               <UserRound size={19} className="text-cyan-200" />
-              <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full bg-transparent outline-none placeholder:text-slate-500" placeholder="admin / buyer / warehouse / customer" />
+              <input value={username} onChange={(e) => setUsername(e.target.value)} className="w-full bg-transparent outline-none" autoComplete="username" />
             </div>
           </label>
           <label className="block">

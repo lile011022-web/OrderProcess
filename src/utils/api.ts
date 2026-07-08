@@ -45,6 +45,11 @@ export type LoginResponse = {
   redirectTo: string;
 };
 
+export type SessionResponse = {
+  user: User;
+  defaultPath: string;
+};
+
 export function loginApi(username: string, password: string, role: Role) {
   return apiRequest<LoginResponse>("/api/auth/login", {
     method: "POST",
@@ -59,6 +64,10 @@ export function changePasswordApi(username: string, role: Role, oldPassword: str
     auth: false,
     body: JSON.stringify({ username, role, oldPassword, newPassword }),
   });
+}
+
+export function getSessionApi() {
+  return apiRequest<SessionResponse>("/api/auth/me");
 }
 
 export function createRecordApi<T>(kind: string, payload: Partial<T>) {

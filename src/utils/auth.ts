@@ -1,5 +1,5 @@
 import type { Role, User } from "../types";
-import { loginApi } from "./api";
+import { getSessionApi, loginApi } from "./api";
 
 const AUTH_STORAGE_KEY = "authUser";
 const AUTH_TOKEN_KEY = "authToken";
@@ -28,6 +28,23 @@ export async function loginWithBackend(username: string, password: string, role:
   localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(result.user));
   localStorage.setItem(AUTH_TOKEN_KEY, result.token);
   return result;
+}
+
+export async function verifyCurrentSession() {
+  const token = getAuthToken();
+  if (!token) {
+    clearCurrentUser();
+    return null;
+  }
+
+  try {
+    const result = await getSessionApi();
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(result.user));
+    return result.user;
+  } catch {
+    clearCurrentUser();
+    return null;
+  }
 }
 
 export function getAuthToken() {

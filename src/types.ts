@@ -50,6 +50,8 @@ export type PackageItem = {
   id: string;
   carrier: "UPS" | "FedEx" | "USPS";
   trackingNo: string;
+  owner?: string;
+  importBatchNo?: string;
   buyer: string;
   product: string;
   expectedAt: string;
@@ -63,6 +65,8 @@ export type PackageItem = {
   paidPendingConfirmAmount: number;
   inboundCost: number;
   exceptionAmount: number;
+  photoCount?: number;
+  note?: string;
   paymentStatus: PaymentStatus;
   overdue: boolean;
 };

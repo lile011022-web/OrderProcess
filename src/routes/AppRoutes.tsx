@@ -28,6 +28,7 @@ import { WarehouseAddresses } from "../pages/settings/WarehouseAddresses";
 import { CustomerProducts } from "../pages/customer/CustomerProducts";
 import { CustomerWarehouses } from "../pages/customer/CustomerWarehouses";
 import { CustomerTasks } from "../pages/customer/CustomerTasks";
+import { CustomerPackages } from "../pages/customer/CustomerPackages";
 import { getCurrentUser } from "../utils/auth";
 import { defaultPathForRole } from "../utils/permissions";
 
@@ -79,6 +80,7 @@ export function AppRoutes() {
           <Route path="/settings/carriers" element={<GenericTablePage title="快递公司配置" desc="UPS、FedEx、USPS 官网查询地址集中维护。" variant="settings" />} />
           <Route path="/customer/tasks" element={<CustomerTasks />} />
           <Route path="/customer/tasks/new" element={<NewPurchaseTask />} />
+          <Route path="/customer/packages" element={<CustomerPackages />} />
           <Route path="/customer/products" element={<CustomerProducts />} />
           <Route path="/customer/warehouses" element={<CustomerWarehouses />} />
         </Route>

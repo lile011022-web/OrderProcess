@@ -124,6 +124,7 @@ export const navItems: NavItem[] = [
     children: [
       { title: "发布采购任务", path: "/customer/tasks/new", roles: customer },
       { title: "我的采购任务", path: "/customer/tasks", roles: customer },
+      { title: "我的包裹", path: "/customer/packages", roles: customer },
       { title: "我的商品资料", path: "/customer/products", roles: customer },
       { title: "我的仓库地址", path: "/customer/warehouses", roles: customer },
     ],

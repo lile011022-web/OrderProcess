@@ -129,6 +129,35 @@ export function listUploadsApi(targetKind: string, targetId: string) {
   return apiRequest<{ data: UploadRecord[] }>(`/api/uploads?targetKind=${encodeURIComponent(targetKind)}&targetId=${encodeURIComponent(targetId)}`);
 }
 
+export async function fetchUploadBlob(uploadId: string) {
+  const headers = new Headers();
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}/api/uploads/${encodeURIComponent(uploadId)}/file`, { headers });
+  if (!response.ok) throw new ApiError(response.status, "照片加载失败");
+  return response.blob();
+}
+
+export function downloadWarehouseInventoryTemplate() {
+  const headers = ["运单号", "快递公司", "商品摘要", "数量", "仓库", "收货人", "实际入库成本", "备注"];
+  const rows = [
+    ["1Z999AA10123456784", "UPS", "2025/26 Bowman Basketball Hobby Box", "12", "DE Newark Pencader Dr 812 Unit D", "Amy Johnson", "0", "外箱完整"],
+    ["794612345678", "FedEx", "2025/26 Topps Chrome Basketball Mega Box", "6", "DE Bear Altair Way 252", "Amy Johnson", "0", ""],
+  ];
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `warehouse-inventory-import-template-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function downloadReportCsv(reportType: string) {
   const headers = new Headers();
   const token = localStorage.getItem(AUTH_TOKEN_KEY);

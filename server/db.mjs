@@ -262,6 +262,14 @@ export function listUploads(targetKind, targetId) {
   `).all(targetKind, targetId);
 }
 
+export function getUpload(id) {
+  return db.prepare(`
+    SELECT id, owner, target_kind AS targetKind, target_id AS targetId, filename, mime_type AS mimeType, path, size, created_at AS createdAt
+    FROM uploads
+    WHERE id = ?
+  `).get(id);
+}
+
 export function listAllUploads() {
   return db.prepare(`
     SELECT id, owner, target_kind AS targetKind, target_id AS targetId, filename, mime_type AS mimeType, path, size, created_at AS createdAt

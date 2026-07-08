@@ -8,6 +8,7 @@ import { carrierConfig, calculateWarehouseFee, getTrackingUrl, inferCarrier } fr
 import {
   deleteRecord,
   getRecord,
+  getUpload,
   getUser,
   listAuditLogs,
   listRecords,
@@ -24,7 +25,7 @@ const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || path.resolve("uploads");
 const MAX_JSON_BYTES = Number(process.env.MAX_JSON_BYTES || 1024 * 1024 * 5);
-const APP_VERSION = process.env.APP_VERSION || "1.3.3";
+const APP_VERSION = process.env.APP_VERSION || "1.3.4";
 const AUTH_WINDOW_MS = Number(process.env.AUTH_RATE_LIMIT_WINDOW_MS || 15 * 60 * 1000);
 const AUTH_MAX_ATTEMPTS = Number(process.env.AUTH_RATE_LIMIT_MAX || 8);
 const authAttempts = new Map();
@@ -177,6 +178,7 @@ function canReadKind(user, kind, item) {
   if (user.role === "admin") return true;
   if (kind === "product") return item.status === "启用" || item.owner === user.displayName;
   if (kind === "warehouse") return item.status === "启用" || item.owner === user.displayName;
+  if (kind === "package" && user.role === "customer") return item.owner === user.displayName;
   if (user.role === "warehouse") return ["package", "packageException", "warehouse", "reconciliation"].includes(kind);
   if (user.role === "buyer") return item.buyer === user.displayName || kind === "task";
   if (user.role === "customer") return item.requester === user.displayName || item.owner === user.displayName;
@@ -292,6 +294,8 @@ function normalizeRecord(kind, body, user, existing = null) {
       id: existing?.id || body.id || makeId("package"),
       carrier,
       trackingNo: cleanText(body.trackingNo, existing?.trackingNo || ""),
+      owner: cleanText(body.owner, existing?.owner || ""),
+      importBatchNo: cleanText(body.importBatchNo, existing?.importBatchNo || ""),
       buyer: cleanText(body.buyer, existing?.buyer || user.displayName),
       product: cleanText(body.product, existing?.product || body.productName || ""),
       expectedAt: body.expectedAt || existing?.expectedAt || now,
@@ -305,6 +309,8 @@ function normalizeRecord(kind, body, user, existing = null) {
       paidPendingConfirmAmount: cleanNumber(body.paidPendingConfirmAmount, existing?.paidPendingConfirmAmount || 0),
       inboundCost: cleanNumber(body.inboundCost, existing?.inboundCost || 0),
       exceptionAmount: cleanNumber(body.exceptionAmount, existing?.exceptionAmount || 0),
+      photoCount: cleanNumber(body.photoCount, existing?.photoCount || 0),
+      note: cleanText(body.note, existing?.note || ""),
       paymentStatus: body.paymentStatus || existing?.paymentStatus || "unpaid",
       overdue: Boolean(body.overdue ?? existing?.overdue ?? false),
     };
@@ -652,7 +658,7 @@ async function route(req, res) {
   if (req.method === "GET" && url.pathname === "/api/packages") {
     const status = url.searchParams.get("status");
     const overdue = url.searchParams.get("overdue");
-    let data = listKindForUser("package", user, url.searchParams, ["id", "trackingNo", "buyer", "product", "warehouse"]);
+    let data = listKindForUser("package", user, url.searchParams, ["id", "trackingNo", "buyer", "product", "warehouse", "owner", "importBatchNo"]);
     if (status) data = data.filter((item) => item.status === status);
     if (overdue === "true") data = data.filter((item) => item.overdue);
     return json(res, 200, { data, total: data.length });
@@ -808,6 +814,31 @@ async function route(req, res) {
     const targetId = url.searchParams.get("targetId");
     if (!targetKind || !targetId) return error(res, 400, "BAD_REQUEST", "targetKind/targetId 必填");
     return json(res, 200, { data: listUploads(targetKind, targetId) });
+  }
+
+  const uploadFileMatch = url.pathname.match(/^\/api\/uploads\/([^/]+)\/file$/);
+  if (req.method === "GET" && uploadFileMatch) {
+    const upload = getUpload(uploadFileMatch[1]);
+    if (!upload) return error(res, 404, "NOT_FOUND", "上传文件不存在");
+    if (upload.targetKind === "package") {
+      const packageItem = getRecord("package", upload.targetId);
+      if (!packageItem || !canReadKind(user, "package", packageItem)) return error(res, 403, "FORBIDDEN", "无权查看该包裹照片");
+    } else if (user.role !== "admin" && upload.owner !== user.username) {
+      return error(res, 403, "FORBIDDEN", "无权查看该上传文件");
+    }
+    if (!fs.existsSync(upload.path)) return error(res, 404, "NOT_FOUND", "上传文件已丢失");
+    const buffer = fs.readFileSync(upload.path);
+    res.writeHead(200, {
+      "content-type": upload.mimeType,
+      "content-length": buffer.length,
+      "access-control-allow-origin": CORS_ORIGIN,
+      "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
+      "access-control-allow-headers": "content-type,authorization",
+      "cache-control": "private, max-age=300",
+      "x-content-type-options": "nosniff",
+    });
+    res.end(buffer);
+    return;
   }
 
   if (req.method === "GET" && url.pathname === "/api/audit-logs") {
